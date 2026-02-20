@@ -1,0 +1,361 @@
+/* REMOVE Google Fonts - we use local Mont fonts now */
+/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'); */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- MONT FONT FACES --- */
+@font-face {
+    font-family: "mont-regular";
+    src: url("./fonts/MontRegular/MontRegular.woff") format("woff");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "mont-light";
+    src: url("./fonts/MontLight/MontLight.woff") format("woff");
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "mont-semi-bold";
+    src: url("./fonts/MontSemiBold/MontSemiBold.woff") format("woff");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "mont-bold";
+    src: url("./fonts/MontBold/MontBold.woff") format("woff");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "mont-heavy";
+    src: url("./fonts/MontBold/MontBold.woff") format("woff");
+    font-weight: 800;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* --- FONT UTILITY OVERRIDES --- */
+@layer utilities {
+    .font-light {
+        font-family: "mont-light" !important;
+        font-weight: 300 !important;
+    }
+
+    .font-bold {
+        font-family: "mont-bold" !important;
+        font-weight: 700 !important;
+    }
+
+    .font-semibold {
+        font-family: "mont-semi-bold" !important;
+        font-weight: 600 !important;
+    }
+
+    .font-regular {
+        font-family: "mont-regular" !important;
+        font-weight: 400 !important;
+    }
+
+    .font-heavy {
+        font-family: "mont-heavy" !important;
+        font-weight: 800 !important;
+    }
+}
+
+/* --- DESIGN SYSTEM VARIABLES --- */
+@layer base {
+  :root {
+    color: #323843;
+    background-color: #f7f9fd;
+    font-family: "mont-regular", Helvetica, Arial, sans-serif;
+    --letter-spacing-base: 0.2px;
+
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 210 100% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 94%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 210 100% 45%;
+
+    --radius: 0.625rem;
+
+    --dashboard-bg: 210 20% 96%;
+    --dashboard-header: 222 47% 11%;
+    --kpi-positive: 142 71% 45%;
+    --kpi-negative: 0 72% 51%;
+    --kpi-warning: 38 92% 50%;
+    --chart-1: 210 100% 50%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 346 77% 50%;
+    --chart-6: 199 89% 48%;
+    --chart-7: 142 71% 45%;
+    --chart-8: 25 95% 53%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 100% 55%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 71% 35%;
+    --success-foreground: 210 40% 98%;
+
+    --warning: 38 92% 40%;
+    --warning-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 212 27% 84%;
+
+    --dashboard-bg: 222 47% 6%;
+    --dashboard-header: 210 40% 98%;
+    --kpi-positive: 142 71% 45%;
+    --kpi-negative: 0 72% 55%;
+    --kpi-warning: 38 92% 50%;
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "mont-regular", Helvetica, Arial, sans-serif;
+  }
+
+  @media (max-width: 639px) {
+    html {
+      font-size: 14px;
+    }
+
+    body {
+      font-size: 0.875rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+    }
+
+    h3 {
+      font-size: 1.125rem;
+    }
+
+    p {
+      font-size: 0.875rem;
+    }
+
+    button {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+/* --- DASHBOARD COMPONENT CLASSES --- */
+@layer components {
+  .dashboard-container {
+    @apply min-h-screen bg-[hsl(var(--dashboard-bg))];
+  }
+
+  .dashboard-header {
+    @apply bg-card border-b border-border px-6 py-4 shadow-sm;
+  }
+
+  .dashboard-title {
+    @apply text-2xl font-semibold text-[hsl(var(--dashboard-header))];
+  }
+
+  .kpi-card {
+    @apply bg-card rounded-lg border border-border p-6 shadow-sm transition-all duration-200 hover:shadow-md;
+  }
+
+  .kpi-card p {
+    @apply text-gray-900;
+  }
+
+  .kpi-value-positive {
+    @apply text-[hsl(var(--kpi-positive))] font-bold text-2xl;
+  }
+
+  .kpi-value-negative {
+    @apply text-[hsl(var(--kpi-negative))] font-bold text-2xl;
+  }
+
+  .kpi-value-warning {
+    @apply text-[hsl(var(--kpi-warning))] font-bold text-2xl;
+  }
+
+  .chart-card {
+    @apply bg-card rounded-lg border border-border p-6 shadow-sm;
+  }
+
+  .chart-title {
+    @apply text-base font-semibold text-gray-900 mb-4;
+  }
+
+  .kpi-card p.text-sm {
+    @apply text-gray-700;
+  }
+
+  /* 
+   * FIXED: Removed global th/td !important overrides that were 
+   * blocking ALL inline color styles on every table in the app.
+   * Colors are now handled per-component via className or inline styles.
+   */
+
+  .dark table {
+    @apply text-gray-50;
+  }
+
+  .dark th {
+    @apply text-gray-100 !important;
+  }
+
+  .dark td {
+    @apply text-gray-100 !important;
+  }
+}
+
+/* --- SONNER TOAST STYLES --- */
+[data-sonner-toast][data-type="error"] {
+    background: #faedea !important;
+    color: #812f1d !important;
+    border: 1px solid #d15134 !important;
+}
+
+[data-sonner-toast][data-type="success"] {
+    background: #f7f9fd !important;
+    color: #17325e !important;
+    border: 1px solid #27549d !important;
+}
+
+[data-sonner-toast][data-type="warning"] {
+    background: #fef5ec !important;
+    color: #a35c0a !important;
+    border: 1px solid #f29630 !important;
+}
+
+[data-sonner-toast][data-type="info"] {
+    background: #f7f9fd !important;
+    color: #17325e !important;
+    border: 1px solid #27549d !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+    background-color: white !important;
+    border: none !important;
+    color: #323843 !important;
+    opacity: 1 !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+    background-color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+[data-sonner-toast] [data-close-button] svg {
+    color: #323843 !important;
+}
+
+/* --- GLOBAL --- */
+button {
+    cursor: pointer;
+}
+
+@keyframes ping-modest {
+    75%,
+    100% {
+        transform: scale(1.15);
+        opacity: 0;
+    }
+}
+
+@layer utilities {
+    .animate-ping-modest {
+        animation: ping-modest 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+}
