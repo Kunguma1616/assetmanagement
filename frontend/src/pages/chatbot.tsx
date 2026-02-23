@@ -294,7 +294,7 @@ export default function ChatBot() {
     );
   };
 
-  const sendMessage = async () => {
+  const sendMessage = async (directQuestion?: string) => {
     if (isProcessing) return;
 
     let currentSession = activeSession;
@@ -311,7 +311,7 @@ export default function ChatBot() {
       currentSession = newSession;
     }
 
-    const question = questionInput.trim();
+    const question = (directQuestion || questionInput).trim();
     if (!question) return;
 
     const sessionId = currentSession.id;
@@ -409,7 +409,7 @@ export default function ChatBot() {
 
   const askQuickQuestion = (question: string) => {
     setQuestionInput(question);
-    setTimeout(() => sendMessage(), 100);
+    sendMessage(question);
   };
 
   const handleCopy = (messageId: string, content: string) => {

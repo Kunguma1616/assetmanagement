@@ -16,14 +16,18 @@ except ImportError:
 # Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from routes.dashboard import router as dashboard_router
+from routes.dashboard import router as dashboard_router      # handles /api/dashboard/*
+from routes.assetdashboad import router as asset_dashboard_router  # handles /api/dashboard/* (asset-specific routes)
+from routes.Asset_allocation import router as allocation_router    # handles /api/allocation/*
+from routes.Asset_cost import router as asset_cost_router          # handles /api/cost/* (asset costs)
+from routes.Assetpercost import router as asset_per_cost_router    # handles /api/asset-cost/* (per-asset costs)
 from routes.webfleet import router as webfleet_router, load_engineers_with_scores, start_scheduler
 from routes.vehicles import router as vehicles_router
 from routes.assets import router as assets_router
 from routes.ai import router as ai_router
 from routes.chat import router as chat_router
 from routes.auth import router as auth_router
-from routes.uploadvehicle import router as upload_router  # Vehicle upload router
+from routes.uploadvehicle import router as upload_router
 from routes.cost import router as cost_router
 from routes.vehicle_condition import router as vehicle_condition_router
 
@@ -43,12 +47,12 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173", 
-        "http://localhost:5174", 
-        "http://localhost:3000", 
-        "http://127.0.0.1:5173", 
-        "http://127.0.0.1:5174", 
-        "http://192.168.54.48:5174", 
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://192.168.54.48:5174",
         "*"
     ],
     allow_credentials=True,
@@ -56,8 +60,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# ─────────────────────────────────────────────────────────
+# ROUTERS
+# ─────────────────────────────────────────────────────────
+# asset_dashboard_router (assetdashboad.py) — asset-specific endpoints:
+#   /api/dashboard/summary, /asset-lookup, /asset-cost-*, /get-assets, etc.
+# dashboard_router (dashboard.py) — vehicle endpoints:
+#   /api/dashboard/vehicle-summary, /vehicles-by-status, /cost-analysis, etc.
+app.include_router(asset_dashboard_router)
 app.include_router(dashboard_router)
+app.include_router(allocation_router)
+app.include_router(asset_cost_router)
+app.include_router(asset_per_cost_router)
 app.include_router(webfleet_router)
 app.include_router(vehicles_router)
 app.include_router(assets_router)
@@ -69,59 +83,54 @@ app.include_router(vehicle_condition_router)
 app.include_router(cost_router)
 
 # ─────────────────────────────────────────────────────────
-# STARTUP EVENT: Load driver cache on app startup
+# STARTUP EVENT
 # ─────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def load_driver_cache():
-    """
-    Preload all engineers with Webfleet scores at startup
-    This ensures chat endpoints have data without hitting dashboard first
-    """
+    """Preload all engineers with Webfleet scores at startup."""
     global GLOBAL_DRIVER_CACHE
     try:
         print("\n" + "="*80)
-        print("🚀 STARTUP: Initializing driver cache...")
+        print("[STARTUP] Initializing driver cache...")
         print("="*80)
-        
-        # First: Start cache scheduler (loads Webfleet scores)
+
         start_scheduler()
-        
-        # Second: Load engineers with cached scores
         result = load_engineers_with_scores()
-        
-        if result and result.get('engineers'):
-            GLOBAL_DRIVER_CACHE = result['engineers']
-            total = len(GLOBAL_DRIVER_CACHE)
-            with_scores = result.get('with_scores', 0)
-            print(f"✅ Cache loaded: {total} engineers ({with_scores} with scores)\n")
-            
-            # 🔄 Reinitialize Groq service with cache
+
+        if result and result.get("engineers"):
+            GLOBAL_DRIVER_CACHE = result["engineers"]
+            total       = len(GLOBAL_DRIVER_CACHE)
+            with_scores = result.get("with_scores", 0)
+            print(f"[OK] Cache loaded: {total} engineers ({with_scores} with scores)\n")
+
             from routes.chat import initialize_groq_service
             initialize_groq_service(driver_cache=GLOBAL_DRIVER_CACHE)
         else:
-            print("⚠️  Cache load returned no data\n")
+            print("[WARNING] Cache load returned no data\n")
             GLOBAL_DRIVER_CACHE = []
     except Exception as e:
-        print(f"⚠️  Failed to preload driver cache: {e}\n")
+        print(f"[WARNING] Failed to preload driver cache: {e}\n")
         import traceback
         traceback.print_exc()
         GLOBAL_DRIVER_CACHE = []
 
+
 @app.get("/")
 async def root():
     return {
-        "status": "running",
+        "status":  "running",
         "message": "Fleet Health Monitor API",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
+
 
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
 
+
 if __name__ == "__main__":
     import uvicorn
-    
     port = 8000
     print(f"[LAUNCH] Starting server on port {port}...")
     uvicorn.run(app, host="0.0.0.0", port=port)

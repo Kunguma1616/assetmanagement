@@ -946,3 +946,12 @@ def get_vehicle_cost(vehicle_id: str):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────
+# ASSET DASHBOARD ENDPOINTS
+# ─────────────────────────────────────────────────────────
+# NOTE: /summary and /asset-lookup are handled by
+# routes/assetdashboad.py which uses custom fields
+# (Asset_Type__c, Price, Is_Available__c) for accurate data.
+# Do NOT add duplicate /summary or /asset-lookup here.

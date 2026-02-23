@@ -67,14 +67,14 @@ def start_scheduler():
     
     # Perform initial cache load
     print("\n" + "="*80)
-    print("🚀 [SCHEDULER] Initializing driver score cache...")
+    print("[SCHEDULER] Initializing driver score cache...")
     print("="*80)
     
     try:
         refresh_webfleet_cache()
-        print("✅ [SCHEDULER] Cache initialization complete\n")
+        print("[OK] [SCHEDULER] Cache initialization complete\n")
     except Exception as e:
-        print(f"⚠️  [SCHEDULER] Cache initialization failed: {e}\n")
+        print(f"[WARNING] [SCHEDULER] Cache initialization failed: {e}\n")
         print("   Cache will be loaded on first request")
 
 

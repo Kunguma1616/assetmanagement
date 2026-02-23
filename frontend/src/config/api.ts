@@ -19,5 +19,5 @@ export const API_ENDPOINTS = {
   DRIVERS_EXCEL: `${API_BASE_URL}/api/dashboard/drivers/excel`,
   
   // Chatbot
-  CHAT: `${API_BASE_URL}/api/chat/send`,
+  CHAT: `${API_BASE_URL}/api/chat`,
 };

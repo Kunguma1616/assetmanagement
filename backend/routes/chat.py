@@ -26,13 +26,13 @@ def initialize_groq_service(driver_cache=None):
             groq_service = GroqService(driver_cache=driver_cache)
             if groq_service and groq_service.client:
                 cache_info = f" ({len(driver_cache) if driver_cache else 0} drivers cached)" if driver_cache else ""
-                print(f"✅ Groq Chat service initialized{cache_info}")
+                print(f"[OK] Groq Chat service initialized{cache_info}")
             else:
-                print("⚠️  Groq Chat service unavailable - chat disabled")
+                print("[WARNING] Groq Chat service unavailable - chat disabled")
         else:
-            print("⚠️  Groq not available - chat disabled")
+            print("[WARNING] Groq not available - chat disabled")
     except Exception as e:
-        print(f"❌ Failed to initialize Groq service: {e}")
+        print(f"[ERROR] Failed to initialize Groq service: {e}")
         groq_service = None
 
 # Initial startup initialization

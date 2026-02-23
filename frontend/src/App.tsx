@@ -21,6 +21,9 @@ import ServiceCostLookup from "./pages/ServiceCostLookup";
 import CostAnalysisPage from "./pages/CostAnalysisPage";
 import Index from "./pages/Index";
 import VehicleCondition from "./pages/vehicleCondition";
+import AssetDashboard from "./pages/AssetDashboad"; // Fixed typo in filename
+import AssetCostPage from "./pages/AssetCost";
+import AssetAllocation from "./pages/Assetallocation";
 import MainLayout from "./components/layout/MainLayout";
 
 const queryClient = new QueryClient();
@@ -31,7 +34,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for OAuth callback params FIRST (before auth check)
     const params = new URLSearchParams(window.location.search);
     const session = params.get("session");
     const user = params.get("user");
@@ -41,14 +43,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       console.log("✅ OAuth callback detected, saving session...");
       sessionStorage.setItem("user_session", session);
       sessionStorage.setItem("user_data", JSON.stringify({ name: user, email: userEmail }));
-      // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
       setIsAuthenticated(true);
       setLoading(false);
       return;
     }
 
-    // Then check if already authenticated
     const sessionId = sessionStorage.getItem("user_session");
     console.log("ProtectedRoute check - sessionId:", !!sessionId);
     setIsAuthenticated(!!sessionId);
@@ -114,6 +114,14 @@ const App = () => (
             }
           />
           <Route
+            path="/copilot"
+            element={
+              <ProtectedRoute>
+                <ChatBot />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/webfleet"
             element={
               <ProtectedRoute>
@@ -121,8 +129,6 @@ const App = () => (
               </ProtectedRoute>
             }
           />
-          
-          
           <Route
             path="/upload"
             element={
@@ -146,7 +152,8 @@ const App = () => (
                 <UploadAsset />
               </ProtectedRoute>
             }
-          /><Route
+          />
+          <Route
             path="/assets"
             element={
               <ProtectedRoute>
@@ -207,6 +214,32 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <VehicleCondition />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ─── Asset Pages ─── */}
+          <Route
+            path="/asset-dashboard"
+            element={
+              <ProtectedRoute>
+                <AssetDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/asset-cost"
+            element={
+              <ProtectedRoute>
+                <AssetCostPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/asset-allocation"
+            element={
+              <ProtectedRoute>
+                <AssetAllocation />
               </ProtectedRoute>
             }
           />

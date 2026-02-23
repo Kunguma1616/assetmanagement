@@ -256,17 +256,11 @@ const FleetDashboard: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: '#27549D' }}>
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg overflow-hidden" style={{ backgroundColor: 'white' }}>
-                <img 
-                  src="/aspectlogo.jpg" 
-                  alt="Aspect Logo" 
-                  className="w-full h-full object-contain p-1"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    e.currentTarget.parentElement!.innerHTML = '<div class="w-full h-full flex items-center justify-center" style="background: linear-gradient(to bottom right, #27549D, #17325E)"><svg class="w-6 h-6" style="color: #F1FF24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg></div>';
-                  }}
-                />
-              </div>
+              <img
+                src="/aspect-logo-icon.svg"
+                alt="Aspect Logo"
+                className="h-10 w-auto"
+              />
               Aspect Fleet Dashboard
             </h1>
             <div className="mt-2 flex items-center gap-4 font-light" style={{ color: '#848EA3' }}>
