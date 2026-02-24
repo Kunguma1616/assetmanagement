@@ -9,7 +9,6 @@ import { LeaversVehiclesChart } from '@/components/dashboard/LeaversVehiclesChar
 import { VehicleDataSheet } from '@/components/dashboard/VehicleDataSheet';
 import { Button } from '@/components/ui/button';
 import { API_ENDPOINTS } from '@/config/api';
-import aspectLogoIcon from '/aspect-logo-icon.svg';
 import { 
   Car, 
   CheckCircle, 
@@ -259,7 +258,7 @@ const FleetDashboard: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: '#27549D', fontFamily: 'MontBold' }}>
               <img
-                src={aspectLogoIcon}
+                src="/aspect-logo-icon.svg"
                 alt="Aspect Logo"
                 className="h-10 w-auto"
               />
