@@ -47,7 +47,7 @@ interface LightboxProps {
 }
 
 /* ── Config ── */
-const API_BASE = "http://localhost:8000/api/vehicle-condition";
+const API_BASE = "/api/vehicle-condition";  // ✅ FIXED - was http://localhost:8000/api/vehicle-condition
 
 /* ── Company Design Tokens ── */
 const C = {
