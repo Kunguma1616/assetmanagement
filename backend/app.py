@@ -18,11 +18,11 @@ except ImportError:
 # Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from routes.dashboard import router as dashboard_router      # handles /api/dashboard/*
-from routes.assetdashboad import router as asset_dashboard_router  # handles /api/dashboard/* (asset-specific routes)
-from routes.Asset_allocation import router as allocation_router    # handles /api/allocation/*
-from routes.Asset_cost import router as asset_cost_router          # handles /api/cost/* (asset costs)
-from routes.Assetpercost import router as asset_per_cost_router    # handles /api/asset-cost/* (per-asset costs)
+from routes.dashboard import router as dashboard_router
+from routes.assetdashboad import router as asset_dashboard_router
+from routes.Asset_allocation import router as allocation_router
+from routes.Asset_cost import router as asset_cost_router
+from routes.Assetpercost import router as asset_per_cost_router
 from routes.webfleet import router as webfleet_router, load_engineers_with_scores, start_scheduler
 from routes.vehicles import router as vehicles_router
 from routes.assets import router as assets_router
@@ -124,9 +124,9 @@ async def health():
 # ─────────────────────────────────────────────────────────
 # SERVE FRONTEND STATIC FILES
 # ─────────────────────────────────────────────────────────
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/assets", StaticFiles(directory=f"{static_dir}/assets"), name="assets")
+static_dir = "/app/static"
+
+app.mount("/assets", StaticFiles(directory=f"{static_dir}/assets"), name="assets")
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
