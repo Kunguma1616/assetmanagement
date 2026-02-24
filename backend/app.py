@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -130,6 +129,11 @@ app.mount("/assets", StaticFiles(directory=f"{static_dir}/assets"), name="assets
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
+    # First check if it's an actual file in the static dir (logo, fonts, etc.)
+    file_path = os.path.join(static_dir, full_path)
+    if full_path and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    # Otherwise serve React app
     return FileResponse(f"{static_dir}/index.html")
 
 
