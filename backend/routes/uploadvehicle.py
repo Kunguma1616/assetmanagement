@@ -26,11 +26,48 @@ router = APIRouter(
 # Initialize Salesforce service
 sf_service = SalesforceService()
 
+# Picklist value mappings based on Salesforce configuration
+PICKLIST_MAPPINGS = {
+    'trade_group': {
+        'drainage': 'Drainage & Plumbing',
+        'drainage_plumbing': 'Drainage & Plumbing',
+        'leak_detection': 'Leak Detection, Damp & Restoration',
+        'leak_detection_damp_restoration': 'Leak Detection, Damp & Restoration',
+        'hvac': 'HVAC & Electrical',
+        'hvac_electrical': 'HVAC & Electrical',
+        'electrical': 'HVAC & Electrical',
+        'building_fabric': 'Building Fabric',
+        'fire_safety': 'Fire Safety',
+        'environmental_services': 'Environmental Services',
+        'office': 'Office',
+    }
+}
+
 
 def get_error_response(detail: str):
     """Helper to create consistent error responses"""
     logger.error(detail)
     raise HTTPException(status_code=500, detail=detail)
+
+
+def normalize_picklist_value(value: str, field_name: str = None) -> str:
+    """Normalize picklist values to match Salesforce format.
+    Uses field-specific mappings when available, otherwise converts underscores to spaces and title cases."""
+    if not value:
+        return value
+    
+    value_lower = value.strip().lower().replace(' ', '_')
+    
+    # Check if there's a specific mapping for this field
+    if field_name and field_name in PICKLIST_MAPPINGS:
+        if value_lower in PICKLIST_MAPPINGS[field_name]:
+            mapped_value = PICKLIST_MAPPINGS[field_name][value_lower]
+            logger.info(f"[MAPPING] {field_name}: '{value}' → '{mapped_value}'")
+            return mapped_value
+    
+    # Default normalization: replace underscores with spaces and title case
+    normalized = value.strip().replace('_', ' ').title()
+    return normalized
 
 
 @router.get("/salesforce/fields")
@@ -119,28 +156,34 @@ async def upload_vehicle(request: Request):
             vehicle_data["Tracking_Number__c"] = data.get("tracking_number").strip()
         
         if data.get("vehicle_type"):
-            vehicle_data["Vehicle_Type__c"] = data.get("vehicle_type").strip()
-            logger.info(f"[FIELD] Vehicle Type: '{data.get('vehicle_type')}'")
+            normalized_type = normalize_picklist_value(data.get("vehicle_type"))
+            vehicle_data["Vehicle_Type__c"] = normalized_type
+            logger.info(f"[FIELD] Vehicle Type: '{normalized_type}'")
         
         if data.get("status"):
-            vehicle_data["Status__c"] = data.get("status").strip()
-            logger.info(f"[FIELD] Status: '{data.get('status')}'")
+            normalized_status = normalize_picklist_value(data.get("status"))
+            vehicle_data["Status__c"] = normalized_status
+            logger.info(f"[FIELD] Status: '{normalized_status}'")
         
         if data.get("ulez_compliant"):
-            vehicle_data["ULEZ_Compliant__c"] = data.get("ulez_compliant").strip()
-            logger.info(f"[FIELD] ULEZ Compliant: '{data.get('ulez_compliant')}'")
+            normalized_ulez = normalize_picklist_value(data.get("ulez_compliant"))
+            vehicle_data["ULEZ_Compliant__c"] = normalized_ulez
+            logger.info(f"[FIELD] ULEZ Compliant: '{normalized_ulez}'")
         
         if data.get("trade_group"):
-            vehicle_data["Trade_Group__c"] = data.get("trade_group").strip()
-            logger.info(f"[FIELD] Trade Group: '{data.get('trade_group')}'")
+            normalized_trade = normalize_picklist_value(data.get("trade_group"), field_name='trade_group')
+            vehicle_data["Trade_Group__c"] = normalized_trade
+            logger.info(f"[FIELD] Trade Group: '{normalized_trade}'")
         
         if data.get("transmission"):
-            vehicle_data["Transmission__c"] = data.get("transmission").strip()
-            logger.info(f"[FIELD] Transmission: '{data.get('transmission')}'")
+            normalized_transmission = normalize_picklist_value(data.get("transmission"))
+            vehicle_data["Transmission__c"] = normalized_transmission
+            logger.info(f"[FIELD] Transmission: '{normalized_transmission}'")
         
         if data.get("department_type"):
-            vehicle_data["Department_Type__c"] = data.get("department_type").strip()
-            logger.info(f"[FIELD] Department Type: '{data.get('department_type')}'")
+            normalized_dept = normalize_picklist_value(data.get("department_type"))
+            vehicle_data["Department_Type__c"] = normalized_dept
+            logger.info(f"[FIELD] Department Type: '{normalized_dept}'")
         
         if reg_date:
             vehicle_data["Registration_Date__c"] = reg_date
@@ -149,12 +192,14 @@ async def upload_vehicle(request: Request):
             vehicle_data["Make_Model__c"] = data.get("make_model").strip()
         
         if data.get("vehicle_ownership"):
-            vehicle_data["Vehicle_Ownership__c"] = data.get("vehicle_ownership").strip()
-            logger.info(f"[FIELD] Vehicle Ownership: '{data.get('vehicle_ownership')}'")
+            normalized_ownership = normalize_picklist_value(data.get("vehicle_ownership"))
+            vehicle_data["Vehicle_Ownership__c"] = normalized_ownership
+            logger.info(f"[FIELD] Vehicle Ownership: '{normalized_ownership}'")
         
         if data.get("garage_repairs"):
-            vehicle_data["Garage_Repairs__c"] = data.get("garage_repairs").strip()
-            logger.info(f"[FIELD] Garage Repairs: '{data.get('garage_repairs')}'")
+            normalized_garage = normalize_picklist_value(data.get("garage_repairs"))
+            vehicle_data["Garage_Repairs__c"] = normalized_garage
+            logger.info(f"[FIELD] Garage Repairs: '{normalized_garage}'")
         
         if data.get("internal_notes"):
             vehicle_data["Internal_Notes__c"] = data.get("internal_notes").strip()
