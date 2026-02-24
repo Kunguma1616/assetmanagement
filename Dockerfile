@@ -48,7 +48,7 @@ ENV FLASK_PORT=8000
 ENV PYTHONUNBUFFERED=1
  
 # Expose the port
-EXPOSE 8000
+EXPOSE 8080
  
 # Run Flask
 CMD ["python", "app.py"]
