@@ -2,6 +2,8 @@
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import sys
 import os
 
@@ -63,10 +65,6 @@ app.add_middleware(
 # ─────────────────────────────────────────────────────────
 # ROUTERS
 # ─────────────────────────────────────────────────────────
-# asset_dashboard_router (assetdashboad.py) — asset-specific endpoints:
-#   /api/dashboard/summary, /asset-lookup, /asset-cost-*, /get-assets, etc.
-# dashboard_router (dashboard.py) — vehicle endpoints:
-#   /api/dashboard/vehicle-summary, /vehicles-by-status, /cost-analysis, etc.
 app.include_router(asset_dashboard_router)
 app.include_router(dashboard_router)
 app.include_router(allocation_router)
@@ -115,30 +113,24 @@ async def load_driver_cache():
         GLOBAL_DRIVER_CACHE = []
 
 
-@app.get("/")
-async def root():
-    return {
-        "status":  "running",
-        "message": "Fleet Health Monitor API",
-        "version": "1.0.0",
-    }
+# ─────────────────────────────────────────────────────────
+# HEALTH CHECK
+# ─────────────────────────────────────────────────────────
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
 
 
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os
-
+# ─────────────────────────────────────────────────────────
+# SERVE FRONTEND STATIC FILES
+# ─────────────────────────────────────────────────────────
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/assets", StaticFiles(directory=f"{static_dir}/assets"), name="assets")
 
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        return FileResponse(f"{static_dir}/index.html")
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy"}
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    return FileResponse(f"{static_dir}/index.html")
 
 
 if __name__ == "__main__":
