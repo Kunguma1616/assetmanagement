@@ -115,21 +115,40 @@ export const colors = {
   },
 };
 
+/**
+ * ✅ MONT FONT SPECIFICATION (USE ONLY MONT FONTS)
+ * 
+ * Font Hierarchy:
+ * - Page Titles, Section Headers, KPI Labels → MontBold (fontWeight: 700)
+ * - Button Labels, Form Labels, Card Titles → MontSemiBold (fontWeight: 600)
+ * - Body Text, Descriptions, Helper Text → MontRegular (fontWeight: 400)
+ * - Disabled Text, Secondary Captions → MontLight (fontWeight: 300)
+ * - Extra Emphasis (Badges, Alerts) → MontBlack (fontWeight: 900)
+ */
 export const fonts = {
+  // Page Titles, Section Headers, KPI Values
   heading: {
     fontFamily: 'MontBold, sans-serif',
     fontWeight: 700,
   },
+  // Button Labels, Form Labels, Card Titles, Badge Text
   subheading: {
     fontFamily: 'MontSemiBold, sans-serif',
     fontWeight: 600,
   },
+  // Body Text, Descriptions, Status Text, Helper Text
   body: {
     fontFamily: 'MontRegular, sans-serif',
     fontWeight: 400,
   },
+  // Disabled Content, Secondary Captions, Meta Information
   light: {
     fontFamily: 'MontLight, sans-serif',
     fontWeight: 300,
+  },
+  // Extra Emphasis: Critical Alerts, Important Status
+  emphasis: {
+    fontFamily: 'MontBlack, sans-serif',
+    fontWeight: 900,
   },
 };

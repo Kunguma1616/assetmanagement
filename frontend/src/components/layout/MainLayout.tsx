@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Car,
   Users,
-  DollarSign,
   Wrench,
   BarChart3,
   UploadCloud,
@@ -36,6 +35,9 @@ const C = {
   bg:           "#F3F4F6",
 };
 
+// ✅ Use ONLY Mont everywhere
+const FONT = "Mont, sans-serif";
+
 // ── Types ────────────────────────────────────────────────────────────────────
 interface NavItem {
   label: string;
@@ -54,7 +56,8 @@ const FLEET_ITEMS: NavItem[] = [
 
 const ASSET_ITEMS: NavItem[] = [
   { label: "Asset Dashboard",  path: "/asset-dashboard",  icon: BarChart3 },
-  { label: "Asset Cost",       path: "/asset-cost",       icon: DollarSign },
+  // ✅ FIX: Asset Cost should be £ not $
+  { label: "Asset Cost",       path: "/asset-cost",       icon: PoundSterling },
   { label: "Asset Allocation", path: "/asset-allocation", icon: GitFork },
 ];
 
@@ -75,24 +78,25 @@ function NavBtn({
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: collapsed ? "9px 0" : "9px 16px 9px 28px",
+        padding: collapsed ? "10px 8px" : "12px 16px",
         justifyContent: collapsed ? "center" : "flex-start",
-        background: active ? C.yellow : hov ? C.borderSubtle : "transparent",
+        background: active ? C.yellow : hov ? "rgba(241, 255, 36, 0.1)" : "transparent",
         border: "none",
-        borderLeft: active ? `3px solid ${C.blue}` : "3px solid transparent",
+        borderRadius: "10px",
         cursor: "pointer",
         textAlign: "left",
-        transition: "background 0.15s",
+        transition: "all 0.2s ease",
+        boxShadow: active ? "0 2px 8px rgba(39, 84, 157, 0.15)" : "none",
       }}
     >
-      <Icon style={{ width: 16, height: 16, flexShrink: 0, color: active ? C.blue : C.gray }} />
+      <Icon style={{ width: 18, height: 18, flexShrink: 0, color: active ? C.blue : C.gray }} />
       {!collapsed && (
         <span style={{
           fontSize: 13,
           fontWeight: active ? 700 : 500,
           color: active ? C.blueDark : hov ? C.blue : C.bodyText,
           lineHeight: 1.3,
-          fontFamily: "Montserrat, Inter, sans-serif",
+          fontFamily: 'MontBold, sans-serif',
         }}>
           {item.label}
         </span>
@@ -117,17 +121,18 @@ function GroupHeader({
         display: "flex",
         alignItems: "center",
         justifyContent: collapsed ? "center" : "space-between",
-        padding: collapsed ? "10px 0" : "10px 16px",
+        padding: collapsed ? "10px 8px" : "10px 16px",
         background: hov ? C.borderSubtle : "transparent",
         border: "none",
+        borderRadius: "8px",
         cursor: "pointer",
-        transition: "background 0.15s",
+        transition: "all 0.2s ease",
       }}
     >
       {collapsed ? (
         <span style={{
           fontSize: 10, fontWeight: 900, color: C.blue,
-          fontFamily: "Montserrat,sans-serif",
+          fontFamily: 'MontBlack, sans-serif',
         }}>
           {label.split(" ").map(w => w[0]).join("")}
         </span>
@@ -135,7 +140,7 @@ function GroupHeader({
         <span style={{
           fontSize: 11, fontWeight: 800, color: C.blue,
           textTransform: "uppercase", letterSpacing: "0.07em",
-          fontFamily: "Montserrat, Inter, sans-serif",
+          fontFamily: 'MontBlack, sans-serif',
         }}>
           {label}
         </span>
@@ -165,24 +170,25 @@ function ActionBtn({
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: collapsed ? "9px 0" : "9px 16px",
+        padding: collapsed ? "10px 8px" : "12px 16px",
         justifyContent: collapsed ? "center" : "flex-start",
-        background: active ? C.yellow : hov ? C.borderSubtle : "transparent",
+        background: active ? C.yellow : hov ? "rgba(241, 255, 36, 0.1)" : "transparent",
         border: "none",
-        borderLeft: active ? `3px solid ${C.blue}` : "3px solid transparent",
+        borderRadius: "10px",
         cursor: "pointer",
         textAlign: "left",
-        transition: "background 0.15s",
+        transition: "all 0.2s ease",
+        boxShadow: active ? "0 2px 8px rgba(39, 84, 157, 0.15)" : "none",
       }}
     >
-      <Icon style={{ width: 16, height: 16, flexShrink: 0, color: active ? C.blue : C.gray }} />
+      <Icon style={{ width: 18, height: 18, flexShrink: 0, color: active ? C.blue : C.gray }} />
       {!collapsed && (
         <span style={{
           fontSize: 13,
           fontWeight: active ? 700 : 500,
           color: active ? C.blueDark : hov ? C.blue : C.bodyText,
           lineHeight: 1.3,
-          fontFamily: "Montserrat, Inter, sans-serif",
+          fontFamily: 'MontBold, sans-serif',
         }}>
           {label}
         </span>
@@ -251,7 +257,7 @@ function CopilotBtn({ collapsed, active, onClick }: { collapsed: boolean; active
           fontSize: 13,
           fontWeight: 700,
           color: C.white,
-          fontFamily: "Montserrat, Inter, sans-serif",
+          fontFamily: 'MontBold, sans-serif',
           whiteSpace: "nowrap",
           letterSpacing: "0.01em",
         }}>
@@ -282,7 +288,7 @@ function SignOutBtn({ collapsed, onClick }: { collapsed: boolean; onClick: () =>
         gap: 8, background: "transparent", border: "none", cursor: "pointer",
         padding: 0, color: hov ? C.red : C.caption,
         fontSize: 12, fontWeight: 600,
-        fontFamily: "Montserrat, Inter, sans-serif",
+        fontFamily: 'MontSemiBold, sans-serif',
         transition: "color 0.15s",
       }}
     >
@@ -339,13 +345,10 @@ export default function MainLayout({ children }: MainLayoutProps) {
   };
 
   const isActive = (path: string) => location.pathname === path;
-
-  // ── Check if copilot route is active ──
   const copilotActive = isActive("/copilot") || isActive("/chat") || isActive("/chatbot");
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: C.bg }}>
-
+    <div style={{ display: "flex", minHeight: "100vh", background: C.bg, fontFamily: 'MontRegular, sans-serif' }}>
       {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <aside style={{
         background: C.white,
@@ -357,6 +360,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
         position: "relative",
         transition: "width 0.3s ease, min-width 0.3s ease",
         flexShrink: 0,
+        fontFamily: 'MontRegular, sans-serif',
       }}>
 
         {/* Logo */}
@@ -367,6 +371,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           padding: collapsed ? "16px 0" : "16px 20px",
           borderBottom: `1px solid ${C.border}`,
           minHeight: 68,
+          fontFamily: 'MontRegular, sans-serif',
         }}>
           {!collapsed ? (
             <img
@@ -385,10 +390,10 @@ export default function MainLayout({ children }: MainLayoutProps) {
                     <div style="width:32px;height:32px;border-radius:8px;background:${C.yellow};
                       display:flex;align-items:center;justify-content:center;">
                       <span style="color:${C.blueDark};font-weight:900;font-size:14px;
-                        font-family:Montserrat,sans-serif;">A</span>
+                        font-family:MontBlack, sans-serif;">A</span>
                     </div>
                     <span style="color:${C.blueDark};font-weight:800;font-size:22px;
-                      font-family:Montserrat,sans-serif;">aspect</span>`;
+                      font-family:MontBlack, sans-serif;">aspect</span>`;
                   p.appendChild(d);
                 }
               }}
@@ -397,8 +402,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
             <div style={{
               width: 32, height: 32, borderRadius: 8, background: C.yellow,
               display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: 'MontBlack, sans-serif',
             }}>
-              <span style={{ color: C.blueDark, fontWeight: 900, fontSize: 14, fontFamily: "Montserrat,sans-serif" }}>
+              <span style={{ color: C.blueDark, fontWeight: 900, fontSize: 14, fontFamily: 'MontBlack, sans-serif' }}>
                 A
               </span>
             </div>
@@ -406,9 +412,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
         </div>
 
         {/* Scrollable nav area */}
-        <nav style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+        <nav style={{ flex: 1, overflowY: "auto", paddingBottom: 8, fontFamily: 'MontRegular, sans-serif' }}>
 
-          {/* Upload New Vehicle */}
           <div style={{ paddingTop: 8 }}>
             <ActionBtn
               label="Upload New Vehicle"
@@ -419,7 +424,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
             />
           </div>
 
-          {/* Register Asset */}
           <ActionBtn
             label="Register Asset"
             icon={PlusCircle}
@@ -430,7 +434,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
           <Divider />
 
-          {/* ── Chumley Copilot AI — active state wired to /copilot route ── */}
           <CopilotBtn
             collapsed={collapsed}
             active={copilotActive}
@@ -439,7 +442,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
           <Divider />
 
-          {/* Fleet Management */}
           <GroupHeader
             label="Fleet Management"
             open={fleetOpen}
@@ -458,7 +460,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
           <Divider />
 
-          {/* Asset Management */}
           <GroupHeader
             label="Asset Management"
             open={assetOpen}
@@ -478,14 +479,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
         </nav>
 
         {/* User + sign-out */}
-        <div style={{ borderTop: `1px solid ${C.border}`, padding: "14px 16px" }}>
+        <div style={{ borderTop: `1px solid ${C.border}`, padding: "14px 16px", fontFamily: 'MontRegular, sans-serif' }}>
           {!collapsed && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, fontFamily: 'MontRegular, sans-serif' }}>
               <div style={{
                 width: 30, height: 30, borderRadius: "50%", background: C.blue,
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                fontFamily: 'MontBlack, sans-serif',
               }}>
-                <span style={{ color: C.white, fontWeight: 800, fontSize: 12, fontFamily: "Montserrat,sans-serif" }}>
+                <span style={{ color: C.white, fontWeight: 800, fontSize: 12, fontFamily: 'MontBlack, sans-serif' }}>
                   {(userData.name?.[0] ?? "U").toUpperCase()}
                 </span>
               </div>
@@ -493,11 +495,11 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 <p style={{
                   fontSize: 12, fontWeight: 700, color: C.title, margin: 0,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  fontFamily: "Montserrat,sans-serif",
+                  fontFamily: 'MontBold, sans-serif',
                 }}>
                   {userData.name}
                 </p>
-                <p style={{ fontSize: 10, color: C.caption, margin: 0, fontFamily: "Montserrat,sans-serif" }}>
+                <p style={{ fontSize: 10, color: C.caption, margin: 0, fontFamily: 'MontRegular, sans-serif' }}>
                   Authenticated
                 </p>
               </div>
@@ -506,12 +508,11 @@ export default function MainLayout({ children }: MainLayoutProps) {
           <SignOutBtn collapsed={collapsed} onClick={handleSignOut} />
         </div>
 
-        {/* Collapse toggle */}
         <CollapseBtn collapsed={collapsed} onClick={() => setCollapsed(c => !c)} />
       </aside>
 
       {/* ── Page content ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "auto" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "auto", fontFamily: 'MontRegular, sans-serif' }}>
         {children}
       </div>
     </div>

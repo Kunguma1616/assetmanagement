@@ -120,9 +120,10 @@ function EngineerCombobox({
             placeholder="Type name to search..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            style={{ fontFamily: 'MontRegular' }}
           />
         ) : (
-          <span className={`flex-1 text-sm truncate ${selected ? 'text-slate-800' : 'text-slate-400'}`}>
+          <span className={`flex-1 text-sm truncate ${selected ? 'text-slate-800' : 'text-slate-400'}`} style={{ fontFamily: 'MontRegular' }}>
             {selected ? selected.name : 'Select Engineer'}
           </span>
         )}
@@ -144,7 +145,7 @@ function EngineerCombobox({
         <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
           <div className="max-h-64 overflow-y-auto">
             {filtered.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-slate-400">
+              <div className="px-4 py-6 text-center text-sm text-slate-400" style={{ fontFamily: 'MontRegular' }}>
                 No engineers found for "{query}"
               </div>
             ) : (
@@ -160,9 +161,9 @@ function EngineerCombobox({
                     <User className="h-3.5 w-3.5 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-800 truncate">{eng.name}</div>
+                    <div className="text-sm font-medium text-slate-800 truncate" style={{ fontFamily: 'MontSemiBold' }}>{eng.name}</div>
                     {eng.contact_number && (
-                      <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                      <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5" style={{ fontFamily: 'MontRegular' }}>
                         <Phone className="h-3 w-3" />
                         {eng.contact_number}
                       </div>
@@ -174,7 +175,7 @@ function EngineerCombobox({
             )}
           </div>
           <div className="px-3 py-2 border-t border-slate-100 bg-slate-50">
-            <p className="text-xs text-slate-400">{filtered.length} of {engineers.length} engineers</p>
+            <p className="text-xs text-slate-400" style={{ fontFamily: 'MontRegular' }}>{filtered.length} of {engineers.length} engineers</p>
           </div>
         </div>
       )}
@@ -242,11 +243,11 @@ function AllocationRow({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           {isCurrent ? (
-            <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">● Current</Badge>
+            <Badge className="bg-green-100 text-green-700 border-green-200 text-xs" style={{ fontFamily: 'MontBold' }}>● Current</Badge>
           ) : (
-            <Badge variant="secondary" className="text-xs">Past</Badge>
+            <Badge variant="secondary" className="text-xs" style={{ fontFamily: 'MontBold' }}>Past</Badge>
           )}
-          <span className="text-xs text-slate-400 font-mono">{record.id.slice(0, 18)}…</span>
+          <span className="text-xs text-slate-400 font-mono" style={{ fontFamily: 'MontRegular' }}>{record.id.slice(0, 18)}…</span>
         </div>
         {!editing && (
           <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-7 px-2 text-xs gap-1 text-slate-500">
@@ -261,7 +262,7 @@ function AllocationRow({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Engineer Combobox */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1" style={{ fontFamily: 'MontSemiBold' }}>
                 <User className="h-3 w-3" /> Engineer
               </Label>
               <EngineerCombobox
@@ -273,7 +274,7 @@ function AllocationRow({
 
             {/* Contact Number — auto-populated but editable */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1" style={{ fontFamily: 'MontSemiBold' }}>
                 <Phone className="h-3 w-3" /> Contact Number
               </Label>
               <div className="relative">
@@ -285,12 +286,12 @@ function AllocationRow({
                   className="pl-9 h-10 text-sm"
                 />
               </div>
-              <p className="text-[11px] text-slate-400">Auto-filled when engineer selected. Edit if needed.</p>
+              <p className="text-[11px] text-slate-400" style={{ fontFamily: 'MontRegular' }}>Auto-filled when engineer selected. Edit if needed.</p>
             </div>
 
             {/* Start Date */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1" style={{ fontFamily: 'MontSemiBold' }}>
                 <CalendarDays className="h-3 w-3" /> Start Date
               </Label>
               <Input
@@ -303,9 +304,9 @@ function AllocationRow({
 
             {/* End Date */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1" style={{ fontFamily: 'MontSemiBold' }}>
                 <CalendarDays className="h-3 w-3" /> End Date
-                <span className="text-slate-400 font-normal normal-case">(Optional)</span>
+                <span className="text-slate-400 font-normal normal-case" style={{ fontFamily: 'MontRegular' }}>(Optional)</span>
               </Label>
               <Input
                 type="date"
@@ -322,14 +323,15 @@ function AllocationRow({
               onClick={handleSave}
               disabled={saving || !selectedEngineerId}
               className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 text-xs"
+              style={{ fontFamily: 'MontSemiBold' }}
             >
               {saving ? (
-                <span className="flex items-center gap-1"><span className="animate-spin">⟳</span> Saving…</span>
+                <span style={{ fontFamily: 'MontSemiBold' }} className="flex items-center gap-1"><span className="animate-spin">⟳</span> Saving…</span>
               ) : (
-                <><Save className="h-3.5 w-3.5" /> Save Changes</>
+                <span style={{ fontFamily: 'MontSemiBold' }}><Save className="h-3.5 w-3.5" /> Save Changes</span>
               )}
             </Button>
-            <Button size="sm" variant="outline" onClick={handleCancel} className="gap-1.5 h-8 text-xs">
+            <Button size="sm" variant="outline" onClick={handleCancel} className="gap-1.5 h-8 text-xs" style={{ fontFamily: 'MontSemiBold' }}>
               <X className="h-3.5 w-3.5" /> Cancel
             </Button>
           </div>
@@ -338,20 +340,20 @@ function AllocationRow({
         /* ── View Mode ── */
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div>
-            <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-0.5">Engineer</p>
-            <p className="font-medium text-slate-800">{record.service_resource_name || '—'}</p>
+            <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-0.5" style={{ fontFamily: 'MontSemiBold' }}>Engineer</p>
+            <p className="font-medium text-slate-800" style={{ fontFamily: 'MontSemiBold' }}>{record.service_resource_name || '—'}</p>
           </div>
           <div>
-            <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-0.5">Contact</p>
-            <p className="font-medium text-slate-800">{record.contact_number || 'N/A'}</p>
+            <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-0.5" style={{ fontFamily: 'MontSemiBold' }}>Contact</p>
+            <p className="font-medium text-slate-800" style={{ fontFamily: 'MontSemiBold' }}>{record.contact_number || 'N/A'}</p>
           </div>
           <div>
-            <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-0.5">Start Date</p>
-            <p className="font-medium text-slate-800">{record.start_date || '—'}</p>
+            <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-0.5" style={{ fontFamily: 'MontSemiBold' }}>Start Date</p>
+            <p className="font-medium text-slate-800" style={{ fontFamily: 'MontSemiBold' }}>{record.start_date || '—'}</p>
           </div>
           <div>
-            <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-0.5">End Date</p>
-            <p className={`font-medium ${isCurrent ? 'text-green-600' : 'text-slate-800'}`}>
+            <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-0.5" style={{ fontFamily: 'MontSemiBold' }}>End Date</p>
+            <p className={`font-medium ${isCurrent ? 'text-green-600' : 'text-slate-800'}`} style={{ fontFamily: 'MontSemiBold' }}>
               {record.end_date || (isCurrent ? 'Current' : '—')}
             </p>
           </div>
@@ -414,14 +416,14 @@ function NewAllocationForm({
 
   return (
     <div className="rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/30 p-5 space-y-4">
-      <p className="text-sm font-semibold text-blue-700 flex items-center gap-2">
+      <p className="text-sm font-semibold text-blue-700 flex items-center gap-2" style={{ fontFamily: 'MontBold' }}>
         <Plus className="h-4 w-4" /> New Allocation
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Engineer Search */}
         <div className="space-y-1.5">
-          <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+          <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1" style={{ fontFamily: 'MontSemiBold' }}>
             <User className="h-3 w-3" /> Engineer
           </Label>
           <EngineerCombobox
@@ -433,7 +435,7 @@ function NewAllocationForm({
 
         {/* Contact Number (auto-filled) */}
         <div className="space-y-1.5">
-          <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+          <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1" style={{ fontFamily: 'MontSemiBold' }}>
             <Phone className="h-3 w-3" /> Contact Number
           </Label>
           <div className="relative">
@@ -449,7 +451,7 @@ function NewAllocationForm({
 
         {/* Start Date */}
         <div className="space-y-1.5">
-          <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+          <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1" style={{ fontFamily: 'MontSemiBold' }}>
             <CalendarDays className="h-3 w-3" /> Start Date
           </Label>
           <Input
@@ -467,10 +469,11 @@ function NewAllocationForm({
           onClick={handleCreate}
           disabled={saving || !selectedEngineerId || !startDate}
           className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 text-xs"
+          style={{ fontFamily: 'MontSemiBold' }}
         >
-          {saving ? 'Creating…' : <><Plus className="h-3.5 w-3.5" /> Create Allocation</>}
+          {saving ? <span style={{ fontFamily: 'MontSemiBold' }}>Creating…</span> : <span style={{ fontFamily: 'MontSemiBold' }}><Plus className="h-3.5 w-3.5" /> Create Allocation</span>}
         </Button>
-        <Button size="sm" variant="outline" onClick={onCancel} className="h-8 text-xs gap-1">
+        <Button size="sm" variant="outline" onClick={onCancel} className="h-8 text-xs gap-1" style={{ fontFamily: 'MontSemiBold' }}>
           <X className="h-3.5 w-3.5" /> Cancel
         </Button>
       </div>
@@ -529,12 +532,12 @@ export default function VehicleAllocationHistory({ vehicleId, allocations: initi
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2" style={{ fontFamily: 'MontBold' }}>
             <Clock className="h-5 w-5 text-blue-600" />
             Vehicle Allocation History
           </h3>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Complete history of driver assignments — Click <strong>Edit</strong> to modify
+          <p className="text-sm text-slate-500 mt-0.5" style={{ fontFamily: 'MontRegular' }}>
+            Complete history of driver assignments — Click <strong style={{ fontFamily: 'MontBold' }}>Edit</strong> to modify
           </p>
         </div>
         <Button
@@ -542,6 +545,7 @@ export default function VehicleAllocationHistory({ vehicleId, allocations: initi
           onClick={() => setShowNewForm(true)}
           disabled={showNewForm}
           className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 text-xs"
+          style={{ fontFamily: 'MontSemiBold' }}
         >
           <Plus className="h-3.5 w-3.5" /> Add Allocation
         </Button>
@@ -559,9 +563,9 @@ export default function VehicleAllocationHistory({ vehicleId, allocations: initi
 
       {/* Allocation Records */}
       {loadingEngineers ? (
-        <div className="text-center py-8 text-slate-400 text-sm animate-pulse">Loading engineers…</div>
+        <div className="text-center py-8 text-slate-400 text-sm animate-pulse" style={{ fontFamily: 'MontRegular' }}>Loading engineers…</div>
       ) : allocations.length === 0 ? (
-        <div className="text-center py-10 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-xl">
+        <div className="text-center py-10 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-xl" style={{ fontFamily: 'MontRegular' }}>
           No allocation history for this vehicle.
         </div>
       ) : (

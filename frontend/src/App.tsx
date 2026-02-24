@@ -21,9 +21,10 @@ import ServiceCostLookup from "./pages/ServiceCostLookup";
 import CostAnalysisPage from "./pages/CostAnalysisPage";
 import Index from "./pages/Index";
 import VehicleCondition from "./pages/vehicleCondition";
-import AssetDashboard from "./pages/AssetDashboad"; // Fixed typo in filename
+import AssetDashboard from "./pages/AssetDashboad";
 import AssetCostPage from "./pages/AssetCost";
 import AssetAllocation from "./pages/Assetallocation";
+import VehicleCostSimple from "./pages/VehicleCostSimple"; // ✅ Added
 import MainLayout from "./components/layout/MainLayout";
 
 const queryClient = new QueryClient();
@@ -193,11 +194,12 @@ const App = () => (
               </ProtectedRoute>
             }
           />
+          {/* ✅ FIXED: /vehicle-cost now routes to VehicleCostSimple */}
           <Route
             path="/vehicle-cost"
             element={
               <ProtectedRoute>
-                <HSBCLeases />
+                <VehicleCostSimple />
               </ProtectedRoute>
             }
           />

@@ -90,6 +90,7 @@ const headerButtonStyle: React.CSSProperties = {
   cursor: 'pointer',
   fontSize: '16px',
   fontWeight: 700,
+  fontFamily: 'MontBold',
   transition: 'all 0.2s ease',
   boxShadow: '0 4px 6px -1px rgba(39, 84, 157, 0.3)',
 };
@@ -221,8 +222,8 @@ const FleetDashboard: React.FC = () => {
       <div className="flex items-center justify-center h-screen" style={{ backgroundColor: '#F7F9FD' }}>
         <div className="text-center">
           <div className="w-16 h-16 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: '#F1FF24', borderTopColor: '#27549D' }}></div>
-          <div className="text-xl font-semibold" style={{ color: '#27549D' }}>Loading Fleet Intelligence...</div>
-          <div className="text-sm font-light mt-2" style={{ color: '#646F86' }}>Fetching real-time data from Salesforce</div>
+          <div className="text-xl font-semibold" style={{ color: '#27549D', fontFamily: 'MontBold' }}>Loading Fleet Intelligence...</div>
+          <div className="text-sm font-light mt-2" style={{ color: '#646F86', fontFamily: 'MontRegular' }}>Fetching real-time data from Salesforce</div>
         </div>
       </div>
     );
@@ -233,11 +234,11 @@ const FleetDashboard: React.FC = () => {
       <div className="flex items-center justify-center h-screen" style={{ backgroundColor: '#F7F9FD' }}>
         <div className="text-center">
           <AlertTriangle className="w-16 h-16 mx-auto mb-4" style={{ color: '#D15134' }} />
-          <div className="text-xl font-semibold" style={{ color: '#1A1D23' }}>{error}</div>
+          <div className="text-xl font-semibold" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>{error}</div>
           <button 
             onClick={() => fetchVehicleSummary()} 
             className="mt-4"
-            style={headerButtonStyle}
+            style={{...headerButtonStyle, fontFamily: 'MontBold'}}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#17325E'; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#27549D'; }}
           >
@@ -255,7 +256,7 @@ const FleetDashboard: React.FC = () => {
       <div className="backdrop-blur-xl rounded-2xl shadow-2xl p-6" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '2px solid #DEE8F7' }}>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: '#27549D' }}>
+            <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: '#27549D', fontFamily: 'MontBold' }}>
               <img
                 src="/aspect-logo-icon.svg"
                 alt="Aspect Logo"
@@ -263,12 +264,12 @@ const FleetDashboard: React.FC = () => {
               />
               Aspect Fleet Dashboard
             </h1>
-            <div className="mt-2 flex items-center gap-4 font-light" style={{ color: '#848EA3' }}>
+            <div className="mt-2 flex items-center gap-4 font-light" style={{ color: '#848EA3', fontFamily: 'MontRegular' }}>
               <span className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: '#2EB844' }}></div>
                 Live Data Feed
               </span>
-              <span className="text-sm" style={{ color: '#848EA3' }}>
+              <span className="text-sm" style={{ color: '#848EA3', fontFamily: 'MontRegular' }}>
                 Last updated: {lastUpdated.toLocaleTimeString()}
               </span>
             </div>
@@ -350,9 +351,9 @@ const FleetDashboard: React.FC = () => {
               </div>
               <ArrowUpRight className="w-5 h-5" style={{ color: '#848EA3' }} />
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23' }}>Current Vehicles</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>Current Vehicles</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#1A1D23' }}>{summary?.total ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>{summary?.total ?? 0}</span>
               <span className="text-sm font-semibold flex items-center gap-1" style={{ color: '#27549D' }}>
                 <TrendingUp className="w-3 h-3" />
                 Active
@@ -379,9 +380,9 @@ const FleetDashboard: React.FC = () => {
               </div>
               <ArrowUpRight className="w-5 h-5" style={{ color: '#848EA3' }} />
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23' }}>Allocated Vehicles</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>Allocated Vehicles</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#1A1D23' }}>{summary?.allocated ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>{summary?.allocated ?? 0}</span>
               <span className="text-sm font-regular" style={{ color: '#646F86' }}>
                 ({Math.round(((summary?.allocated ?? 0) / (summary?.total ?? 1)) * 100)}%)
               </span>
@@ -407,9 +408,9 @@ const FleetDashboard: React.FC = () => {
               </div>
               <AlertTriangle className="w-5 h-5 animate-pulse" style={{ color: '#D15134' }} />
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23' }}>Vehicles in Garage</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>Vehicles in Garage</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#D15134' }}>{summary?.garage ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#D15134', fontFamily: 'MontBold' }}>{summary?.garage ?? 0}</span>
               <span className="text-sm font-semibold flex items-center gap-1" style={{ color: '#D15134' }}>
                 <ArrowDownRight className="w-3 h-3" />
                 Critical
@@ -436,9 +437,9 @@ const FleetDashboard: React.FC = () => {
               </div>
               <ArrowUpRight className="w-5 h-5" style={{ color: '#848EA3' }} />
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23' }}>Spare Vehicles Ready</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>Spare Vehicles Ready</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#1A1D23' }}>{summary?.spare_ready ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>{summary?.spare_ready ?? 0}</span>
               <span className="text-sm font-semibold" style={{ color: '#2EB844' }}>Available</span>
             </div>
             <p className="text-sm font-regular mt-2" style={{ color: '#323843' }}>Ready for immediate deployment</p>
@@ -462,9 +463,9 @@ const FleetDashboard: React.FC = () => {
               </div>
               <ArrowUpRight className="w-5 h-5" style={{ color: '#848EA3' }} />
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23' }}>Reserved Vehicles</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>Reserved Vehicles</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#1A1D23' }}>{summary?.reserved ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>{summary?.reserved ?? 0}</span>
               <span className="text-sm font-semibold" style={{ color: '#F29630' }}>Reserved</span>
             </div>
             <p className="text-sm font-regular mt-2" style={{ color: '#323843' }}>Reserved for specific use cases</p>
@@ -488,9 +489,9 @@ const FleetDashboard: React.FC = () => {
               </div>
               <ArrowDownRight className="w-5 h-5" style={{ color: '#D15134' }} />
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23' }}>Written Off Vehicles</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#1A1D23', fontFamily: 'MontBold' }}>Written Off Vehicles</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#812F1D' }}>{summary?.written_off ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#812F1D', fontFamily: 'MontBold' }}>{summary?.written_off ?? 0}</span>
               <span className="text-sm font-regular" style={{ color: '#646F86' }}>Decommissioned</span>
             </div>
             <p className="text-sm font-regular mt-2" style={{ color: '#323843' }}>Removed from active fleet</p>
@@ -517,9 +518,9 @@ const FleetDashboard: React.FC = () => {
                 URGENT
               </div>
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#A35C0A' }}>MOT Due in 30 Days</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#A35C0A', fontFamily: 'MontBold' }}>MOT Due in 30 Days</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#A35C0A' }}>{summary?.mot_due ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#A35C0A', fontFamily: 'MontBold' }}>{summary?.mot_due ?? 0}</span>
               <span className="text-sm font-semibold" style={{ color: '#F29630' }}>Expiring Soon</span>
             </div>
             <p className="text-sm mt-2 font-semibold" style={{ color: '#A35C0A' }}>⚠️ Immediate compliance action required</p>
@@ -546,9 +547,9 @@ const FleetDashboard: React.FC = () => {
                 SCHEDULE
               </div>
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#17325E' }}>Vehicles to Service</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#17325E', fontFamily: 'MontBold' }}>Vehicles to Service</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#17325E' }}>{summary?.due_service ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#17325E', fontFamily: 'MontBold' }}>{summary?.due_service ?? 0}</span>
               <span className="text-sm font-semibold" style={{ color: '#27549D' }}>Due Soon</span>
             </div>
             <p className="text-sm mt-2 font-semibold" style={{ color: '#17325E' }}>Service due in next 30 days</p>
@@ -575,9 +576,9 @@ const FleetDashboard: React.FC = () => {
                 PAY NOW
               </div>
             </div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#812F1D' }}>Road Tax Due</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: '#812F1D', fontFamily: 'MontBold' }}>Road Tax Due</h3>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold" style={{ color: '#812F1D' }}>{summary?.tax_due ?? 0}</span>
+              <span className="text-4xl font-bold" style={{ color: '#812F1D', fontFamily: 'MontBold' }}>{summary?.tax_due ?? 0}</span>
               <span className="text-sm font-semibold" style={{ color: '#D15134' }}>Renewal Needed</span>
             </div>
             <p className="text-sm mt-2 font-semibold" style={{ color: '#812F1D' }}>⚠️ Tax renewal required within 30 days</p>
@@ -592,11 +593,11 @@ const FleetDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="backdrop-blur-xl rounded-2xl shadow-lg p-6" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '2px solid #DEE8F7' }}>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#17325E' }}>
+            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#17325E', fontFamily: 'MontBold' }}>
               <BarChart3 className="w-6 h-6" style={{ color: '#27549D' }} />
               Fleet Distribution by Trade Group
             </h2>
-            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D' }}>
+            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D', fontFamily: 'MontBold' }}>
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
@@ -609,11 +610,11 @@ const FleetDashboard: React.FC = () => {
 
         <div className="backdrop-blur-xl rounded-2xl shadow-lg p-6" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '2px solid #DEE8F7' }}>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#17325E' }}>
+            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#17325E', fontFamily: 'MontBold' }}>
               <PieChart className="w-6 h-6" style={{ color: '#27549D' }} />
               Fleet Distribution by Vehicle Type
             </h2>
-            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D' }}>
+            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D', fontFamily: 'MontBold' }}>
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
@@ -629,11 +630,11 @@ const FleetDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="backdrop-blur-xl rounded-2xl shadow-lg p-6" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '2px solid #DEE8F7' }}>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#17325E' }}>
+            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#17325E', fontFamily: 'MontBold' }}>
               <Settings className="w-6 h-6" style={{ color: '#27549D' }} />
               Spare Vehicles by Trade Group
             </h2>
-            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D' }}>View All</Button>
+            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D', fontFamily: 'MontBold' }}>View All</Button>
           </div>
           <SpareVehiclesChart
             data={spareVansByTradeGroup}
@@ -643,11 +644,11 @@ const FleetDashboard: React.FC = () => {
 
         <div className="backdrop-blur-xl rounded-2xl shadow-lg p-6" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '2px solid #DEE8F7' }}>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#17325E' }}>
+            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#17325E', fontFamily: 'MontBold' }}>
               <Users className="w-6 h-6" style={{ color: '#27549D' }} />
               Leavers Vehicles Management
             </h2>
-            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D' }}>View All</Button>
+            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D', fontFamily: 'MontBold' }}>View All</Button>
           </div>
           <LeaversVehiclesChart
             data={leaversByVanNumber}

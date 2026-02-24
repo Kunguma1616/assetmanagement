@@ -7,7 +7,7 @@
 
 /* --- MONT FONT FACES --- */
 @font-face {
-    font-family: "mont-regular";
+    font-family: "MontRegular";
     src: url("./fonts/MontRegular/MontRegular.woff") format("woff");
     font-weight: 400;
     font-style: normal;
@@ -15,7 +15,7 @@
 }
 
 @font-face {
-    font-family: "mont-light";
+    font-family: "MontLight";
     src: url("./fonts/MontLight/MontLight.woff") format("woff");
     font-weight: 300;
     font-style: normal;
@@ -23,7 +23,7 @@
 }
 
 @font-face {
-    font-family: "mont-semi-bold";
+    font-family: "MontSemiBold";
     src: url("./fonts/MontSemiBold/MontSemiBold.woff") format("woff");
     font-weight: 600;
     font-style: normal;
@@ -31,7 +31,7 @@
 }
 
 @font-face {
-    font-family: "mont-bold";
+    font-family: "MontBold";
     src: url("./fonts/MontBold/MontBold.woff") format("woff");
     font-weight: 700;
     font-style: normal;
@@ -39,8 +39,16 @@
 }
 
 @font-face {
-    font-family: "mont-heavy";
-    src: url("./fonts/MontBold/MontBold.woff") format("woff");
+    font-family: "MontBlack";
+    src: url("./fonts/MontBlack/MontBlack.woff") format("woff");
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "MontHeavy";
+    src: url("./fonts/MontHeavy/MontHeavy.woff") format("woff");
     font-weight: 800;
     font-style: normal;
     font-display: swap;
@@ -49,28 +57,33 @@
 /* --- FONT UTILITY OVERRIDES --- */
 @layer utilities {
     .font-light {
-        font-family: "mont-light" !important;
+        font-family: "MontLight", sans-serif !important;
         font-weight: 300 !important;
     }
 
     .font-bold {
-        font-family: "mont-bold" !important;
+        font-family: "MontBold", sans-serif !important;
         font-weight: 700 !important;
     }
 
     .font-semibold {
-        font-family: "mont-semi-bold" !important;
+        font-family: "MontSemiBold", sans-serif !important;
         font-weight: 600 !important;
     }
 
     .font-regular {
-        font-family: "mont-regular" !important;
+        font-family: "MontRegular", sans-serif !important;
         font-weight: 400 !important;
     }
 
     .font-heavy {
-        font-family: "mont-heavy" !important;
+        font-family: "MontHeavy", sans-serif !important;
         font-weight: 800 !important;
+    }
+
+    .font-black {
+        font-family: "MontBlack", sans-serif !important;
+        font-weight: 900 !important;
     }
 }
 
@@ -79,7 +92,7 @@
   :root {
     color: #323843;
     background-color: #f7f9fd;
-    font-family: "mont-regular", Helvetica, Arial, sans-serif;
+    font-family: "MontRegular", Helvetica, Arial, sans-serif;
     --letter-spacing-base: 0.2px;
 
     --background: 210 20% 98%;
