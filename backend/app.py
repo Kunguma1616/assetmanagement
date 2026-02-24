@@ -131,6 +131,6 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    port = 8000
+    port = 8080
     print(f"[LAUNCH] Starting server on port {port}...")
     uvicorn.run(app, host="0.0.0.0", port=port)
