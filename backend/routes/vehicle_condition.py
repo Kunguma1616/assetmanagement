@@ -11,6 +11,9 @@ from salesforce_service import SalesforceService
 router = APIRouter(prefix="/api/vehicle-condition", tags=["vehicle_condition"])
 sf_service = SalesforceService()
 
+# GCP backend URL
+BACKEND_URL = "https://aspect-asset-850122601904.europe-west1.run.app"
+
 _http_client: httpx.AsyncClient | None = None
 
 async def get_http_client() -> httpx.AsyncClient:
@@ -31,46 +34,22 @@ async def proxy_image(version_id: str):
 
     access_token = sf_service.sf.session_id
     instance_url = f"https://{sf_service.sf.sf_instance}"
-
-    # ✅ USE REST API ENDPOINT INSTEAD OF SERVLET
-    # The servlet needs a browser session cookie
-    # The REST API works with just the Bearer token
     rest_url = f"{instance_url}/services/data/v60.0/sobjects/ContentVersion/{version_id}/VersionData"
-
-    print(f"[IMAGE] Fetching via REST API: {version_id}")
-    print(f"[IMAGE] URL: {rest_url}")
 
     try:
         client = await get_http_client()
-
-        response = await client.get(
-            rest_url,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-        )
-
-        print(f"[IMAGE] {version_id} → status={response.status_code}, size={len(response.content)} bytes, type={response.headers.get('content-type', '?')}")
+        response = await client.get(rest_url, headers={"Authorization": f"Bearer {access_token}"})
 
         if response.status_code == 401:
-            print(f"[IMAGE] ❌ 401 Unauthorized - token expired?")
             raise HTTPException(status_code=401, detail="Salesforce token expired")
-
         if response.status_code != 200:
-            print(f"[IMAGE] ❌ HTTP {response.status_code}")
             raise HTTPException(status_code=404, detail="Image not found")
-
         if len(response.content) == 0:
-            print(f"[IMAGE] ❌ Empty content")
             raise HTTPException(status_code=500, detail="Empty image")
 
         content_type = response.headers.get("content-type", "image/jpeg")
-
         if "text/html" in content_type:
-            print(f"[IMAGE] ❌ Still got HTML - body: {response.text[:300]}")
-            raise HTTPException(status_code=403, detail="Got HTML - auth failed")
-
-        print(f"[IMAGE] ✅ Success {version_id} - {len(response.content)} bytes of {content_type}")
+            raise HTTPException(status_code=403, detail="Auth failed")
 
         return Response(
             content=response.content,
@@ -83,26 +62,23 @@ async def proxy_image(version_id: str):
         )
 
     except httpx.TimeoutException:
-        print(f"[IMAGE] ❌ Timeout for {version_id}")
         raise HTTPException(status_code=504, detail="Timeout")
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[IMAGE] ❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/form/{form_id}")
 def get_single_form_with_images(form_id: str):
-    form_query = f"""
+    form_result = sf_service.execute_soql(f"""
         SELECT Id, Name, Owner.Name, Description__c,
                Current_Engineer_Assigned_to_Vehicle__r.Name,
                Inspection_Result__c, CreatedDate
         FROM Vehicle_Condition_Form__c
         WHERE Id = '{form_id}'
         LIMIT 1
-    """
-    form_result = sf_service.execute_soql(form_query)
+    """)
     if not form_result:
         raise HTTPException(status_code=404, detail="Form not found")
 
@@ -127,7 +103,7 @@ def get_single_form_with_images(form_id: str):
                 images.append({
                     "id": img["Id"],
                     "title": img.get("Title", "Image"),
-                    "url": f"http://localhost:8000/api/vehicle-condition/image/{img['Id']}"
+                    "url": f"{BACKEND_URL}/api/vehicle-condition/image/{img['Id']}"
                 })
 
     return {"form": form_data, "images": images}
