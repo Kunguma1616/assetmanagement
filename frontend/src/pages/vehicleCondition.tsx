@@ -71,7 +71,21 @@ const C = {
 } as const;
 
 const FONT = "'Mont', 'Montserrat', sans-serif";
-const API_BASE = "http://localhost:8000/api/vehicle-condition";
+
+// ✅ FIX: Use deployed Cloud Run URL instead of localhost
+// Detects environment automatically - uses relative path in production (same-origin)
+// or falls back to the Cloud Run URL
+const API_BASE = (() => {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    // If running on Cloud Run or any non-localhost host, use same origin
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      return `${window.location.origin}/api/vehicle-condition`;
+    }
+  }
+  // Local development fallback
+  return "http://localhost:8000/api/vehicle-condition";
+})();
 
 /* ── KPI Card Component ── */
 interface KPICardProps {
@@ -222,7 +236,6 @@ const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage }) => 
                   {columns.map((col) => {
                     let content = row[col.key as keyof typeof row];
 
-                    // Format status as a pill
                     if (col.key === "status") {
                       const colors = getStatusColor(content as string);
                       content = (
@@ -242,16 +255,14 @@ const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage }) => 
                       );
                     }
 
-                    // Format days with icon
                     if (col.key === "daysSince" && content !== null && content !== undefined) {
                       content = (
-                        <span style={{ fontWeight: 600, color: content > 14 ? C.error.default : C.success.default }}>
+                        <span style={{ fontWeight: 600, color: (content as number) > 14 ? C.error.default : C.success.default }}>
                           {content === null ? "No data" : `${content} days`}
                         </span>
                       );
                     }
 
-                    // Format dates
                     if (col.key === "latestVcrDate") {
                       content = content || "No report";
                     }
@@ -381,7 +392,6 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
           boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
         }}
       >
-        {/* Header */}
         <div
           style={{
             padding: "24px 28px",
@@ -412,7 +422,6 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
           </button>
         </div>
 
-        {/* Content */}
         <div style={{ overflow: "auto", flex: 1, padding: "24px 28px" }}>
           <p style={{ fontSize: "12px", color: C.gray.caption, marginBottom: "16px" }}>
             {data.length} vehicle{data.length !== 1 ? "s" : ""}
@@ -463,82 +472,56 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
                     </td>
                   </tr>
                 ) : (
-                  data.map((row, idx) => (
-                    <tr
-                      key={idx}
-                      style={{
-                        borderBottom: `1px solid ${C.border.subtle}`,
-                        transition: "background 0.2s",
-                      }}
-                      onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = C.gray.negative)}
-                      onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = "#FFFFFF")}
-                    >
-                      {columns.map((col) => {
-                        let content = row[col.key as keyof typeof row];
+                  data.map((row, idx) => {
+                    const getStatusColor = (status: string) => {
+                      switch (status) {
+                        case "Submitted": return { bg: C.surface.successSubtle, color: C.success.default };
+                        case "Overdue": return { bg: C.surface.warningSubtle, color: C.warning.default };
+                        case "Missing": return { bg: C.surface.errorSubtle, color: C.error.default };
+                        default: return { bg: C.gray.negative, color: C.gray.body };
+                      }
+                    };
 
-                        // Format status as a pill
-                        if (col.key === "status") {
-                          const getStatusColor = (status: string) => {
-                            switch (status) {
-                              case "Submitted":
-                                return { bg: C.surface.successSubtle, color: C.success.default };
-                              case "Overdue":
-                                return { bg: C.surface.warningSubtle, color: C.warning.default };
-                              case "Missing":
-                                return { bg: C.surface.errorSubtle, color: C.error.default };
-                              default:
-                                return { bg: C.gray.negative, color: C.gray.body };
-                            }
-                          };
+                    return (
+                      <tr
+                        key={idx}
+                        style={{ borderBottom: `1px solid ${C.border.subtle}`, transition: "background 0.2s" }}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = C.gray.negative)}
+                        onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = "#FFFFFF")}
+                      >
+                        {columns.map((col) => {
+                          let content = row[col.key as keyof typeof row];
 
-                          const colors = getStatusColor(content as string);
-                          content = (
-                            <span
-                              style={{
-                                display: "inline-block",
-                                padding: "4px 10px",
-                                borderRadius: "6px",
-                                background: colors.bg,
-                                color: colors.color,
-                                fontSize: "12px",
-                                fontWeight: 600,
-                              }}
-                            >
+                          if (col.key === "status") {
+                            const colors = getStatusColor(content as string);
+                            content = (
+                              <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: "6px", background: colors.bg, color: colors.color, fontSize: "12px", fontWeight: 600 }}>
+                                {content}
+                              </span>
+                            );
+                          }
+
+                          if (col.key === "daysSince" && content !== null && content !== undefined) {
+                            content = (
+                              <span style={{ fontWeight: 600, color: (content as number) > 14 ? C.error.default : C.success.default }}>
+                                {`${content} days`}
+                              </span>
+                            );
+                          }
+
+                          if (col.key === "latestVcrDate") {
+                            content = content || "No report";
+                          }
+
+                          return (
+                            <td key={col.key} style={{ padding: "12px 16px", color: C.text.body, width: col.width, wordBreak: "break-word" }}>
                               {content}
-                            </span>
+                            </td>
                           );
-                        }
-
-                        // Format days with icon
-                        if (col.key === "daysSince" && content !== null && content !== undefined) {
-                          content = (
-                            <span style={{ fontWeight: 600, color: content > 14 ? C.error.default : C.success.default }}>
-                              {content === null ? "No data" : `${content} days`}
-                            </span>
-                          );
-                        }
-
-                        // Format dates
-                        if (col.key === "latestVcrDate") {
-                          content = content || "No report";
-                        }
-
-                        return (
-                          <td
-                            key={col.key}
-                            style={{
-                              padding: "12px 16px",
-                              color: C.text.body,
-                              width: col.width,
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            {content}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))
+                        })}
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -553,6 +536,7 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
 const VehicleConditionDashboard: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -561,7 +545,6 @@ const VehicleConditionDashboard: React.FC = () => {
   const [lightboxTitle, setLightboxTitle] = useState("");
   const [modalOpen, setModalOpen] = useState<"submitted" | "overdue" | "missing" | null>(null);
 
-  // Load dashboard on mount
   useEffect(() => {
     loadDashboard();
   }, []);
@@ -569,12 +552,14 @@ const VehicleConditionDashboard: React.FC = () => {
   const loadDashboard = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${API_BASE}/compliance/dashboard/all-allocated`);
-      if (!res.ok) throw new Error("Failed to load dashboard");
+      if (!res.ok) throw new Error(`Server error: ${res.status} ${res.statusText}`);
       const data = await res.json();
       setDashboard(data);
     } catch (e) {
       console.error("Dashboard error:", e);
+      setError(e instanceof Error ? e.message : "Failed to load dashboard");
     } finally {
       setLoading(false);
     }
@@ -588,15 +573,23 @@ const VehicleConditionDashboard: React.FC = () => {
     try {
       setSearchLoading(true);
       setSearchError("");
+      setSearchResult(null);
       const res = await fetch(`${API_BASE}/compliance/search/${encodeURIComponent(term)}`);
       if (!res.ok) {
         if (res.status === 404) {
           setSearchError("Vehicle not found");
         } else {
-          throw new Error("Search failed");
+          throw new Error(`Search failed: ${res.status}`);
         }
       } else {
         const data = await res.json();
+        // ✅ FIX: Rewrite imageUrl to use current origin instead of localhost
+        if (data.images) {
+          data.images = data.images.map((img: { imageUrl: string; [key: string]: unknown }) => ({
+            ...img,
+            imageUrl: img.imageUrl.replace("http://localhost:8000", window.location.origin),
+          }));
+        }
         setSearchResult(data);
       }
     } catch (e) {
@@ -606,10 +599,8 @@ const VehicleConditionDashboard: React.FC = () => {
     }
   };
 
-  const overduCount =
-    dashboard?.notSubmitted.filter((v) => v.status === "Overdue").length || 0;
-  const missingCount =
-    dashboard?.notSubmitted.filter((v) => v.status === "Missing").length || 0;
+  const overduCount = dashboard?.notSubmitted.filter((v) => v.status === "Overdue").length || 0;
+  const missingCount = dashboard?.notSubmitted.filter((v) => v.status === "Missing").length || 0;
 
   const submittedColumns: TableColumn[] = [
     { key: "vanName", label: "Van Number", width: "15%" },
@@ -629,15 +620,7 @@ const VehicleConditionDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          fontFamily: FONT,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: FONT }}>
         <div style={{ textAlign: "center" }}>
           <div
             style={{
@@ -656,23 +639,52 @@ const VehicleConditionDashboard: React.FC = () => {
     );
   }
 
+  // ✅ NEW: Error state UI instead of silent failure
+  if (error) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: FONT }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: "40px",
+            background: C.surface.errorSubtle,
+            border: `2px solid ${C.border.error}`,
+            borderRadius: "16px",
+            maxWidth: "480px",
+          }}
+        >
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⚠️</div>
+          <h2 style={{ color: C.error.default, marginBottom: "12px", fontSize: "20px" }}>Failed to Load Dashboard</h2>
+          <p style={{ color: C.text.subtle, fontSize: "14px", marginBottom: "24px" }}>{error}</p>
+          <button
+            onClick={loadDashboard}
+            style={{
+              padding: "12px 28px",
+              borderRadius: "8px",
+              border: "none",
+              background: C.brand.blue,
+              color: "#FFFFFF",
+              fontWeight: 700,
+              fontSize: "14px",
+              fontFamily: FONT,
+              cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ fontFamily: FONT, background: C.gray.surface, minHeight: "100vh", paddingBottom: "40px" }}>
       <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       {/* Header */}
-      <div
-        style={{
-          background: "#FFFFFF",
-          borderBottom: `1px solid ${C.border.subtle}`,
-          padding: "40px 20px",
-          marginBottom: "32px",
-        }}
-      >
+      <div style={{ background: "#FFFFFF", borderBottom: `1px solid ${C.border.subtle}`, padding: "40px 20px", marginBottom: "32px" }}>
         <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
           <h1 style={{ fontSize: "28px", fontWeight: 700, color: C.text.title, margin: "0 0 8px 0" }}>
             14-Day Vehicle Condition Report
@@ -788,28 +800,14 @@ const VehicleConditionDashboard: React.FC = () => {
                   <p style={{ fontSize: "13px", color: C.gray.subtle, margin: "0 0 12px 0", fontWeight: 600 }}>
                     Attached Images ({searchResult.images.length})
                   </p>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-                      gap: "12px",
-                    }}
-                  >
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "12px" }}>
                     {searchResult.images.map((img) => (
                       <div
                         key={img.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => {
-                          setLightboxImage(img.imageUrl);
-                          setLightboxTitle(img.title);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            setLightboxImage(img.imageUrl);
-                            setLightboxTitle(img.title);
-                          }
-                        }}
+                        onClick={() => { setLightboxImage(img.imageUrl); setLightboxTitle(img.title); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setLightboxImage(img.imageUrl); setLightboxTitle(img.title); } }}
                         style={{
                           cursor: "pointer",
                           borderRadius: "8px",
@@ -819,25 +817,10 @@ const VehicleConditionDashboard: React.FC = () => {
                           background: C.gray.negative,
                           transition: "transform 0.2s, box-shadow 0.2s",
                         }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLDivElement).style.transform = "scale(1.05)";
-                          (e.currentTarget as HTMLDivElement).style.boxShadow =
-                            "0 8px 24px rgba(39,84,157,0.12)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
-                          (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1.05)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 24px rgba(39,84,157,0.12)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
                       >
-                        <img
-                          src={img.imageUrl}
-                          alt={img.title}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
+                        <img src={img.imageUrl} alt={img.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       </div>
                     ))}
                   </div>
@@ -851,85 +834,24 @@ const VehicleConditionDashboard: React.FC = () => {
 
         {/* KPI Cards */}
         <div style={{ display: "flex", gap: "16px", marginBottom: "40px", flexWrap: "wrap" }}>
-          <KPICard
-            label="Total Allocated"
-            value={dashboard?.totalAllocated || 0}
-            subtext="Active Vehicles"
-            color="blue"
-            icon="🚐"
-          />
-          <KPICard
-            label="SUBMITTED"
-            value={dashboard?.submittedCount || 0}
-            subtext="Within 14 days"
-            color="green"
-            icon="✓"
-            onClick={() => setModalOpen("submitted")}
-          />
-          <KPICard
-            label="OVERDUE"
-            value={overduCount}
-            subtext="Older than 14 days"
-            color="orange"
-            icon="⚠"
-            onClick={() => setModalOpen("overdue")}
-          />
-          <KPICard
-            label="MISSING"
-            value={missingCount}
-            subtext="Not Submitted in 14 Days"
-            color="red"
-            icon="✗"
-            onClick={() => setModalOpen("missing")}
-          />
+          <KPICard label="Total Allocated" value={dashboard?.totalAllocated || 0} subtext="Active Vehicles" color="blue" icon="🚐" />
+          <KPICard label="SUBMITTED" value={dashboard?.submittedCount || 0} subtext="Within 14 days" color="green" icon="✓" onClick={() => setModalOpen("submitted")} />
+          <KPICard label="OVERDUE" value={overduCount} subtext="Older than 14 days" color="orange" icon="⚠" onClick={() => setModalOpen("overdue")} />
+          <KPICard label="MISSING" value={missingCount} subtext="Not Submitted in 14 Days" color="red" icon="✗" onClick={() => setModalOpen("missing")} />
         </div>
 
         {/* Tables */}
-        <Table
-          title="✓ SUBMITTED"
-          data={dashboard?.submitted || []}
-          columns={submittedColumns}
-          emptyMessage="All vehicles are compliant!"
-        />
-
-        <Table
-          title="✗ NOT SUBMITTED"
-          data={dashboard?.notSubmitted || []}
-          columns={notSubmittedColumns}
-          emptyMessage="All vehicles have submitted reports!"
-        />
+        <Table title="✓ SUBMITTED" data={dashboard?.submitted || []} columns={submittedColumns} emptyMessage="All vehicles are compliant!" />
+        <Table title="✗ NOT SUBMITTED" data={dashboard?.notSubmitted || []} columns={notSubmittedColumns} emptyMessage="All vehicles have submitted reports!" />
       </div>
 
       {/* Lightbox */}
       <Lightbox image={lightboxImage} title={lightboxTitle} onClose={() => setLightboxImage(null)} />
 
-      {/* Modals for KPI lists */}
-      <ListModal
-        isOpen={modalOpen === "submitted"}
-        title="✓ SUBMITTED"
-        data={dashboard?.submitted || []}
-        columns={submittedColumns}
-        onClose={() => setModalOpen(null)}
-        color="green"
-      />
-
-      <ListModal
-        isOpen={modalOpen === "overdue"}
-        title="⚠ OVERDUE"
-        data={dashboard?.notSubmitted.filter((v) => v.status === "Overdue") || []}
-        columns={notSubmittedColumns}
-        onClose={() => setModalOpen(null)}
-        color="orange"
-      />
-
-      <ListModal
-        isOpen={modalOpen === "missing"}
-        title="✗ NOT SUBMITTED VCR"
-        data={dashboard?.notSubmitted.filter((v) => v.status === "Missing") || []}
-        columns={notSubmittedColumns}
-        onClose={() => setModalOpen(null)}
-        color="red"
-      />
+      {/* Modals */}
+      <ListModal isOpen={modalOpen === "submitted"} title="✓ SUBMITTED" data={dashboard?.submitted || []} columns={submittedColumns} onClose={() => setModalOpen(null)} color="green" />
+      <ListModal isOpen={modalOpen === "overdue"} title="⚠ OVERDUE" data={dashboard?.notSubmitted.filter((v) => v.status === "Overdue") || []} columns={notSubmittedColumns} onClose={() => setModalOpen(null)} color="orange" />
+      <ListModal isOpen={modalOpen === "missing"} title="✗ NOT SUBMITTED VCR" data={dashboard?.notSubmitted.filter((v) => v.status === "Missing") || []} columns={notSubmittedColumns} onClose={() => setModalOpen(null)} color="red" />
     </div>
   );
 };
