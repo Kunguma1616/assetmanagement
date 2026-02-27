@@ -837,7 +837,7 @@ const VehicleConditionDashboard: React.FC = () => {
           <KPICard label="Total Allocated" value={dashboard?.totalAllocated || 0} subtext="Active Vehicles" color="blue" icon="🚐" />
           <KPICard label="SUBMITTED" value={dashboard?.submittedCount || 0} subtext="Within 14 days" color="green" icon="✓" onClick={() => setModalOpen("submitted")} />
           <KPICard label="OVERDUE" value={overduCount} subtext="Older than 14 days" color="orange" icon="⚠" onClick={() => setModalOpen("overdue")} />
-          <KPICard label="MISSING" value={missingCount} subtext="Not Submitted in 14 Days" color="red" icon="✗" onClick={() => setModalOpen("missing")} />
+          <KPICard label="MISSING" value={missingCount} subtext=" VCR Not Submitted " color="red" icon="✗" onClick={() => setModalOpen("missing")} />
         </div>
 
         {/* Tables */}
