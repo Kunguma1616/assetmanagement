@@ -17,7 +17,6 @@ import {
   RefreshCw,
   ChevronDown,
   Search,
-  Settings,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,6 +51,7 @@ const formatTime = (date: Date | string): string => {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
+
   });
 };
 
@@ -180,7 +180,22 @@ const QUICK_ACTIONS = [
 export default function ChatBot() {
   const [sessions, setSessions] = useState<Session[]>(() => {
     const saved = localStorage.getItem("chatbot_sessions_v2");
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed.map((s: any) => ({
+        ...s,
+        createdAt: new Date(s.createdAt),
+        updatedAt: new Date(s.updatedAt),
+        messages: Array.isArray(s.messages) ? s.messages.map((m: any) => ({
+          ...m,
+          createdAt: new Date(m.createdAt),
+        })) : [],
+      })) : [];
+    } catch (e) {
+      console.error("Failed to parse sessions from localStorage:", e);
+      return [];
+    }
   });
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
@@ -198,9 +213,6 @@ export default function ChatBot() {
   const [questionInput, setQuestionInput] = useState<string>("");
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
-
-  const userName = 'Fleet Manager';
-  const userInitials = 'FM';
 
   // Save sessions to localStorage
   useEffect(() => {
@@ -295,10 +307,16 @@ export default function ChatBot() {
   };
 
   const sendMessage = async (directQuestion?: string) => {
-    if (isProcessing) return;
+    console.log('📤 Send button clicked - isProcessing:', isProcessing);
+    
+    if (isProcessing) {
+      console.log('⏸️ Already processing, ignoring click');
+      return;
+    }
 
     let currentSession = activeSession;
     if (!currentSession) {
+      console.log('📝 No active session, creating new one');
       const newSession: Session = {
         id: generateId(),
         title: 'New Conversation',
@@ -311,8 +329,13 @@ export default function ChatBot() {
       currentSession = newSession;
     }
 
-    const question = (directQuestion || questionInput).trim();
-    if (!question) return;
+    const question = String(directQuestion || questionInput).trim();
+    console.log('📨 Question to send:', question);
+    
+    if (!question) {
+      console.log('❌ Question is empty');
+      return;
+    }
 
     const sessionId = currentSession.id;
     const startTime = Date.now();
@@ -340,6 +363,7 @@ export default function ChatBot() {
 
     setQuestionInput("");
     setIsProcessing(true);
+    console.log('🔄 Processing started, sending to backend...');
 
     try {
       const history = [...(currentSession.messages || []), userMessage].map(m => ({ 
@@ -348,7 +372,10 @@ export default function ChatBot() {
       }));
 
       const base = API_BASE_URL || '';
-      const response = await fetch(`${base}/api/chat`, {
+      const url = `${base}/api/chat`;
+      console.log('🌐 API URL:', url);
+      
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -357,11 +384,16 @@ export default function ChatBot() {
         }),
       });
 
+      console.log('📨 Backend response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errText = await response.text();
+        console.error('❌ Backend error:', errText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Received data:', data);
       const processingTime = Date.now() - startTime;
 
       const botMessage: Message = {
@@ -384,12 +416,12 @@ export default function ChatBot() {
         )
       );
     } catch (err) {
-      console.error("Chat error:", err);
+      console.error("❌ Chat error:", err);
 
       const errorMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: `⚠️ **Connection Error**\n\nUnable to reach the AI service. Please ensure:\n- The backend service is running\n- Network connection is stable\n- API endpoint is configured correctly`,
+        content: `⚠️ **Connection Error**\n\n${err instanceof Error ? err.message : String(err)}\n\nPlease ensure:\n- Backend service is running on port 8000\n- Network connection is stable\n- Try: \`cd backend && python app.py\``,
         createdAt: new Date(),
         type: "alert",
       };
@@ -404,6 +436,7 @@ export default function ChatBot() {
     } finally {
       setIsProcessing(false);
       inputRef.current?.focus();
+      console.log('✨ Processing complete');
     }
   };
 
@@ -446,7 +479,7 @@ export default function ChatBot() {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-white">Fleet AI</h2>
-                <p className="text-xs text-slate-400">Pro Assistant</p>
+                <p className="text-xs text-slate-400">AI  Assistant</p>
               </div>
             </div>
           </div>
@@ -522,22 +555,6 @@ export default function ChatBot() {
             </div>
           ))}
         </div>
-
-        {/* User Info */}
-        <div className="border-t border-slate-700/50 p-4 bg-slate-900/50">
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg">
-              {userInitials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white truncate text-sm">{userName}</p>
-              <p className="text-xs text-slate-400">Premium Account</p>
-            </div>
-            <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
-              <Settings size={16} className="text-slate-400" />
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Main Chat Area */}
@@ -554,11 +571,11 @@ export default function ChatBot() {
               </button>
               <div>
                 <h1 className="text-lg font-bold flex items-center gap-2" style={{ color: '#27549D', fontFamily: 'MontBold' }}>
-                  <span className="text-xl">🚗</span>
-                  Fleet AI Assistant
+                  <span className="text-xl"></span>
+                  Chumley Copilot AI 
                 </h1>
                 <p className="text-xs" style={{ color: '#646F86', fontFamily: 'MontRegular' }}>
-                  Chat & Analytics
+                  
                 </p>
               </div>
             </div>
@@ -794,7 +811,7 @@ export default function ChatBot() {
               </div>
               <button
                 onClick={sendMessage}
-                disabled={isProcessing || !activeSession || !questionInput.trim()}
+                disabled={isProcessing || !questionInput.trim()}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-2xl hover:shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 font-semibold flex items-center gap-2"
               >
                 <Send size={20} />
@@ -808,7 +825,7 @@ export default function ChatBot() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes fade-in {
           from {
             opacity: 0;
