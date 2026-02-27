@@ -42,18 +42,8 @@ if (typeof document !== 'undefined' && !document.getElementById('mont-wf-v2')) {
   const s = document.createElement('style');
   s.id = 'mont-wf-v2';
   s.textContent = `
-    @font-face{font-family:'Mont';src:url('/fonts/MontBlack/MontBlack.otf') format('opentype');font-weight:950;font-style:normal;}
-    @font-face{font-family:'Mont';src:url('/fonts/MontHeavy/MontHeavy.otf') format('opentype');font-weight:900;font-style:normal;}
-    @font-face{font-family:'Mont';src:url('/fonts/MontHeavyItalic/MontHeavyItalic.otf') format('opentype');font-weight:900;font-style:italic;}
-    @font-face{font-family:'Mont';src:url('/fonts/MontBold/MontBold.otf') format('opentype');font-weight:700;font-style:normal;}
-    @font-face{font-family:'Mont';src:url('/fonts/MontBoldItalic/MontBoldItalic.otf') format('opentype');font-weight:700;font-style:italic;}
-    @font-face{font-family:'Mont';src:url('/fonts/MontSemiBold/MontSemiBold.otf') format('opentype');font-weight:600;font-style:normal;}
-    @font-face{font-family:'Mont';src:url('/fonts/MontRegular/MontRegular.otf') format('opentype');font-weight:400;font-style:normal;}
-    @font-face{font-family:'Mont';src:url('/fonts/MontLight/MontLight.otf') format('opentype');font-weight:300;font-style:normal;}
-    @font-face{font-family:'Mont';src:url('/fonts/MontThin/MontThin.otf') format('opentype');font-weight:100;font-style:normal;}
-
-    /* Force Mont everywhere — overrides Tailwind */
-    *, body, html { font-family: 'Mont', sans-serif !important; }
+    /* Use system fonts and Montserrat as fallback - no corrupted OTF files */
+    *, body, html { font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
 
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: ${C.borderSubtle}; }
