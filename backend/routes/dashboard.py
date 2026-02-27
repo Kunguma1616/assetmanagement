@@ -697,7 +697,9 @@ def get_drivers_from_excel():
     Replaces the old CSV-based implementation
     """
     try:
-        print("📊 Fetching engineers from Salesforce...")
+        print("\n" + "="*80)
+        print("📊 GET /api/dashboard/drivers/excel - Fetching engineers from Salesforce...")
+        print("="*80)
         sf = SalesforceService()
         
         # Get all ACTIVE engineers from Salesforce with comprehensive filters
@@ -740,6 +742,63 @@ def get_drivers_from_excel():
                 "source": "Webfleet + Salesforce"
             }
         
+        # ✅ NEW: Get vehicle allocations to fetch actual van numbers
+        print("🚀 Fetching vehicle data and allocations...")
+        
+        # First: Get all vehicle van_numbers
+        vehicle_query = """
+            SELECT Id, Van_Number__c, Name
+            FROM Vehicle__c
+            LIMIT 5000
+        """
+        
+        try:
+            vehicle_result = sf.sf.query(vehicle_query)
+            all_vehicles = vehicle_result.get('records', [])
+            # Build Vehicle ID → van_number mapping
+            vehicle_to_van = {}
+            for vehicle in all_vehicles:
+                vehicle_id = vehicle.get('Id', '')
+                van_number = vehicle.get('Van_Number__c', '')
+                vehicle_name = vehicle.get('Name', '')
+                display_name = van_number if van_number else vehicle_name
+                if vehicle_id:
+                    vehicle_to_van[vehicle_id] = display_name if display_name else 'N/A'
+        except Exception as e:
+            print(f"⚠️ Error fetching vehicles: {e}")
+            vehicle_to_van = {}
+        
+        # Second: Get active allocations by Service_Resource ID
+        print("🚀 Fetching active allocations...")
+        allocation_query = """
+            SELECT 
+                Service_Resource__c,
+                Vehicle__c,
+                Start_date__c
+            FROM Vehicle_Allocation__c
+            WHERE Service_Resource__c != null
+            AND Start_date__c <= TODAY
+            AND (End_date__c = NULL OR End_date__c >= TODAY)
+            ORDER BY Start_date__c DESC
+        """
+        
+        try:
+            allocation_result = sf.sf.query(allocation_query)
+            all_allocations = allocation_result.get('records', [])
+            # Build Service_Resource ID -> van_number mapping
+            service_resource_to_van = {}
+            for allocation in all_allocations:
+                service_resource_id = allocation.get('Service_Resource__c', '')
+                vehicle_id = allocation.get('Vehicle__c', '')
+                van_number = vehicle_to_van.get(vehicle_id, 'N/A')
+                
+                # Store most recent allocation for each engineer
+                if service_resource_id and service_resource_id not in service_resource_to_van:
+                    service_resource_to_van[service_resource_id] = van_number
+        except Exception as e:
+            print(f"⚠️ Error fetching allocations: {e}")
+            service_resource_to_van = {}
+        
         # Fetch Webfleet service and get ALL data at once
         webfleet = WebfleetService()
         print(f"\n🚀 BATCH LOADING: Pre-computing all Webfleet scores for {len(engineers_result)} engineers...")
@@ -766,6 +825,9 @@ def get_drivers_from_excel():
                 # Handle new field structure: RelatedRecord.Email
                 engineer_email = engineer.get('RelatedRecord', {}).get('Email', '') if isinstance(engineer.get('RelatedRecord'), dict) else engineer.get('Email__c', '')
                 trade = engineer.get('Trade_Lookup__c', 'Engineer')
+                
+                # ✅ Get actual van_number from allocation mapping
+                van_number = service_resource_to_van.get(engineer_id, 'N/A')
                 
                 # Get pre-computed OptiDrive score (INSTANT - no API call)
                 driving_score = 0
@@ -796,7 +858,7 @@ def get_drivers_from_excel():
                     "name": engineer_name,
                     "email": engineer_email,
                     "score": rounded_score,
-                    "van_number": engineer_id,
+                    "van_number": van_number,
                     "trade_group": trade,
                     "score_class": score_class
                 }
@@ -805,11 +867,12 @@ def get_drivers_from_excel():
                 
             except Exception as e:
                 print(f"⚠️ Error processing engineer {engineer_name}: {e}")
+                engineer_id = engineer.get('Id', '')
                 drivers.append({
                     "name": engineer.get('Name', 'Unknown'),
                     "email": engineer.get('RelatedRecord', {}).get('Email', '') if isinstance(engineer.get('RelatedRecord'), dict) else engineer.get('Email__c', ''),
                     "score": 0,
-                    "van_number": engineer.get('Id', ''),
+                    "van_number": service_resource_to_van.get(engineer_id, 'N/A'),
                     "trade_group": engineer.get('Trade_Lookup__c', 'Engineer'),
                     "score_class": "poor"
                 })
@@ -834,6 +897,12 @@ def get_drivers_from_excel():
         }
         
         print(f"✅ Successfully loaded {len(drivers)} engineers with Webfleet scores")
+        
+        # Log top 5 drivers being returned
+        print(f"\n📤 TOP 5 DRIVERS BEING RETURNED TO WEBFLEET FRONTEND:")
+        for driver in drivers[:5]:
+            print(f"   {driver['name']} → Van: '{driver['van_number']}' | Score: {driver['score']}")
+        print("="*80 + "\n")
         
         return {
             "success": True,
