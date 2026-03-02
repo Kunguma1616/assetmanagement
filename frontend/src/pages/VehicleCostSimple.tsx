@@ -3,6 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Loader, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell, PieChart, Pie,
+} from 'recharts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface VehicleCost {
@@ -1192,6 +1196,32 @@ function ServicePaymentTab() {
 
   const avgCost = summary?.average_vehicle_cost ?? 0;
 
+  // ── Insight data derivations ──────────────────────────────────────────────
+  const top10 = useMemo(() =>
+    [...vehicles]
+      .sort((a, b) => b.total_cost - a.total_cost)
+      .slice(0, 10)
+      .map(v => ({
+        name: v.van_number || v.name?.substring(0, 12) || '—',
+        cost: Math.round(v.total_cost),
+        label: v.name || v.van_number,
+      })),
+  [vehicles]);
+
+  const costByType = useMemo(() => {
+    const agg: Record<string, number> = {};
+    vehicles.forEach(v => {
+      Object.entries(v.cost_breakdown).forEach(([type, amt]) => {
+        agg[type] = (agg[type] || 0) + amt;
+      });
+    });
+    return Object.entries(agg)
+      .map(([name, value]) => ({ name, value: Math.round(value) }))
+      .sort((a, b) => b.value - a.value);
+  }, [vehicles]);
+
+  const PIE_COLORS = ['#27549D','#F29630','#2EB844','#D15134','#7099DB','#E49786','#A35C0A','#646F86','#848EA3','#F7C182'];
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const base = [...vehicles].sort((a, b) => b.total_cost - a.total_cost);
@@ -1260,6 +1290,92 @@ function ServicePaymentTab() {
               <p style={{ fontSize: '26px', fontWeight: 'bold', color: s.color, fontFamily: 'MontBold', lineHeight: 1 }}>{s.value}</p>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Insights Charts ──────────────────────────────────────────────────── */}
+      {vehicles.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '20px', marginBottom: '24px' }}>
+
+          {/* Top 10 Vehicles Bar Chart */}
+          <div style={{ background: 'white', borderRadius: '12px', padding: '20px', border: `1px solid ${colors.grayscale.border.default}`, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: colors.primary.default, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Top 10 Highest Service Cost</p>
+            <p style={{ fontSize: '11px', color: colors.grayscale.caption, marginBottom: '16px' }}>Vehicles ranked by total spend — hover for amount</p>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={top10} layout="vertical" margin={{ top: 0, right: 60, left: 10, bottom: 0 }} barCategoryGap="22%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 10, fill: colors.grayscale.caption }}
+                  axisLine={false} tickLine={false}
+                  tickFormatter={v => `£${(v / 1000).toFixed(0)}k`}
+                />
+                <YAxis
+                  dataKey="name" type="category" width={70}
+                  tick={{ fontSize: 11, fill: colors.grayscale.body, fontWeight: 600 }}
+                  axisLine={false} tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{ background: 'white', border: `1px solid ${colors.grayscale.border.default}`, borderRadius: 8, fontSize: 12 }}
+                  formatter={(v: number, _name, props) => [`£${v.toLocaleString('en-GB')}`, props.payload.label]}
+                  labelFormatter={() => ''}
+                />
+                <Bar dataKey="cost" radius={[0, 6, 6, 0]} maxBarSize={26}>
+                  {top10.map((_, i) => (
+                    <Cell key={i} fill={i === 0 ? colors.error.default : i < 3 ? colors.support.orange : colors.primary.default} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap' }}>
+              {[
+                { color: colors.error.default, label: '#1 Highest cost' },
+                { color: colors.support.orange, label: '#2–3 High cost' },
+                { color: colors.primary.default, label: '#4–10 Normal' },
+              ].map(({ color, label }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: colors.grayscale.caption }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Cost by Type Pie Chart */}
+          <div style={{ background: 'white', borderRadius: '12px', padding: '20px', border: `1px solid ${colors.grayscale.border.default}`, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: colors.primary.default, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Fleet Cost by Type</p>
+            <p style={{ fontSize: '11px', color: colors.grayscale.caption, marginBottom: '8px' }}>Total spend breakdown across all vehicles</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={costByType} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value" paddingAngle={2}>
+                  {costByType.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: 'white', border: `1px solid ${colors.grayscale.border.default}`, borderRadius: 8, fontSize: 12 }}
+                  formatter={(v: number) => [`£${v.toLocaleString('en-GB')}`, '']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+              {costByType.slice(0, 6).map((item, i) => {
+                const total = costByType.reduce((s, x) => s + x.value, 0);
+                const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
+                return (
+                  <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: PIE_COLORS[i % PIE_COLORS.length], flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: colors.grayscale.body, fontWeight: 600 }}>{item.name}</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: colors.primary.default, fontWeight: 700 }}>
+                      £{item.value.toLocaleString('en-GB')} <span style={{ color: colors.grayscale.caption, fontWeight: 400 }}>({pct}%)</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
