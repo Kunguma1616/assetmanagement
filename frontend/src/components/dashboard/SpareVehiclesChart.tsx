@@ -11,23 +11,17 @@ interface SpareVehiclesChartProps {
   title: string;
 }
 
-export const SpareVehiclesChart: React.FC<SpareVehiclesChartProps> = ({ data, title }) => {
+export const SpareVehiclesChart: React.FC<SpareVehiclesChartProps> = ({ data }) => {
   const sortedData = [...data].sort((a, b) => b.count - a.count);
 
   return (
-    <div className="chart-card h-full">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="chart-title mb-0">{title}</h3>
-        <span className="text-xs text-primary cursor-pointer hover:underline">
-          View Report (Spare Vans Ready)
-        </span>
-      </div>
+    <div className="h-full">
       <div className="h-[250px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={sortedData}
             layout="vertical"
-            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
             barCategoryGap="25%"
           >
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={true} vertical={true} />
@@ -36,13 +30,14 @@ export const SpareVehiclesChart: React.FC<SpareVehiclesChartProps> = ({ data, ti
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
               axisLine={{ stroke: 'hsl(var(--border))' }}
               tickLine={false}
-              domain={[0, 'dataMax + 0.5']}
+              allowDecimals={false}
+              domain={[0, 'dataMax + 1']}
             />
             <YAxis
               dataKey="name"
               type="category"
-              width={200}
-              tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
+              width={160}
+              tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
               axisLine={{ stroke: 'hsl(var(--border))' }}
               tickLine={false}
             />

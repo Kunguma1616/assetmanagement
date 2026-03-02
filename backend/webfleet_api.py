@@ -423,7 +423,7 @@ class WebfleetAPI:
     def _generate_demo_score(self, email):
         """
         Generate a realistic demo score based on email hash
-        Returns scores between 5.5 and 9.8 to show variety
+        Returns scores between 0 and 10 to show variety including bad drivers
         """
         if not email:
             return 0
@@ -432,8 +432,8 @@ class WebfleetAPI:
         hash_obj = hashlib.md5(email.lower().encode())
         hash_int = int(hash_obj.hexdigest(), 16)
         
-        # Generate score between 5.5 and 9.8
-        base_score = 5.5 + (hash_int % 44) / 10.0
+        # Generate score between 0 and 10 (including bad drivers)
+        base_score = (hash_int % 100) / 10.0  # 0 to 10
         
         # Add some variation
         variation = (hash_int % 10) / 100.0

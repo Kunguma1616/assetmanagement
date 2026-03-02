@@ -65,8 +65,17 @@ interface SalesforceVehicle {
   Make_Model__c?: string;
   Service_Cost__c?: number;
   Maintenance_Cost__c?: number;
+  Vehicle_Ownership__c?: string;
+  // Service fields
+  Last_Service_Date__c?: string;
   Next_Service_Date__c?: string;
+  // MOT fields
+  Last_MOT_Date__c?: string;
   Next_MOT_Date__c?: string;
+  // Road tax fields
+  Last_Road_Tax__c?: string;
+  Next_Road_Tax__c?: string;
+  Next_Road_Tax_Editable__c?: string;
 }
 
 interface VehiclesByStatusResponse {
@@ -137,16 +146,23 @@ const FleetDashboard: React.FC = () => {
 
   const convertVehicle = (v: SalesforceVehicle): VehicleRecord => {
     return {
-      id: v.Id,
       name: v.Name || '',
       vanNumber: v.Van_Number__c || v.Name || '',
       regNo: v.Reg_No__c || '',
       status: v.Status__c || '',
       vehicleType: v.Vehicle_Type__c || v.Make_Model__c || '',
       tradeGroup: v.Trade_Group__c || '',
-      serviceCost: v.Service_Cost__c != null ? v.Service_Cost__c : (v.Next_Service_Date__c || ''),
-      maintenanceCost: v.Maintenance_Cost__c != null ? v.Maintenance_Cost__c : (v.Next_MOT_Date__c || ''),
-    } as unknown as VehicleRecord;
+      vehicleOwnership: v.Vehicle_Ownership__c || '',
+      serviceCost: '',
+      maintenanceCost: '',
+      // Service fields
+      lastServiceDate: v.Last_Service_Date__c || '',
+      nextServiceDate: v.Next_Service_Date__c || '',
+      // Road tax fields
+      lastRoadTax: v.Last_Road_Tax__c || '',
+      nextRoadTax: v.Next_Road_Tax__c || '',
+      nextRoadTaxEditable: v.Next_Road_Tax_Editable__c || '',
+    } as VehicleRecord;
   };
 
   const fetchVehiclesByStatus = async (status: string, title: string, description: string, sheetType: SheetType) => {
@@ -597,10 +613,7 @@ const FleetDashboard: React.FC = () => {
               <BarChart3 className="w-6 h-6" style={{ color: '#27549D' }} />
               Fleet Distribution by Trade Group
             </h2>
-            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D', fontFamily: 'MontBold' }}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
+            
           </div>
           <TradeGroupStackedChart
             data={tradeGroupChartData}
@@ -614,10 +627,6 @@ const FleetDashboard: React.FC = () => {
               <PieChart className="w-6 h-6" style={{ color: '#27549D' }} />
               Fleet Distribution by Vehicle Type
             </h2>
-            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D', fontFamily: 'MontBold' }}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
           </div>
           <VehicleTypeStackedChart
             data={vehicleTypeChartData}
@@ -634,7 +643,6 @@ const FleetDashboard: React.FC = () => {
               <Settings className="w-6 h-6" style={{ color: '#27549D' }} />
               Spare Vehicles by Trade Group
             </h2>
-            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D', fontFamily: 'MontBold' }}>View All</Button>
           </div>
           <SpareVehiclesChart
             data={spareVansByTradeGroup}
@@ -648,7 +656,6 @@ const FleetDashboard: React.FC = () => {
               <Users className="w-6 h-6" style={{ color: '#27549D' }} />
               Leavers Vehicles Management
             </h2>
-            <Button variant="outline" size="sm" className="font-semibold" style={{ borderColor: '#27549D', color: '#27549D', fontFamily: 'MontBold' }}>View All</Button>
           </div>
           <LeaversVehiclesChart
             data={leaversByVanNumber}
@@ -664,6 +671,7 @@ const FleetDashboard: React.FC = () => {
         title={sheetData.title}
         description={sheetData.description}
         vehicles={sheetVehicles}
+        sheetType={activeSheet}
       />
     </div>
   );

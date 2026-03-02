@@ -225,23 +225,9 @@ export default function AssetCost() {
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: FONT }}>
       <style>{`
-        /* ── Mont font faces — served from /fonts/ (NO Google Fonts) ── */
-        @font-face { font-family:'Mont'; src:url('/fonts/MontHeavy/MontHeavy.otf') format('opentype');         font-weight:900; font-style:normal; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontHeavyItalic/MontHeavyItalic.otf') format('opentype'); font-weight:900; font-style:italic; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontBold/MontBold.otf') format('opentype');           font-weight:700; font-style:normal; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontBoldItalic/MontBoldItalic.otf') format('opentype'); font-weight:700; font-style:italic; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontSemiBold/MontSemiBold.otf') format('opentype');   font-weight:600; font-style:normal; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontSemiBoldItalic/MontSemiBoldItalic.otf') format('opentype'); font-weight:600; font-style:italic; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontRegular/MontRegular.otf') format('opentype');     font-weight:400; font-style:normal; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontRegularItalic/MontRegularItalic.otf') format('opentype'); font-weight:400; font-style:italic; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontLight/MontLight.otf') format('opentype');         font-weight:300; font-style:normal; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontLightItalic/MontLightItalic.otf') format('opentype'); font-weight:300; font-style:italic; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontBook/MontBook.otf') format('opentype');           font-weight:350; font-style:normal; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontThin/MontThin.otf') format('opentype');           font-weight:100; font-style:normal; }
-        @font-face { font-family:'Mont'; src:url('/fonts/MontBlack/MontBlack.otf') format('opentype');         font-weight:950; font-style:normal; }
-
+        /* Use system fonts instead of corrupted OTF files */
         * { box-sizing: border-box; }
-        body, * { font-family: 'Mont', sans-serif !important; }
+        body, * { font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: ${C.borderSubtle}; }
         ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }

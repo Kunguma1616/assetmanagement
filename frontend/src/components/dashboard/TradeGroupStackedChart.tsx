@@ -21,7 +21,7 @@ const COLORS = {
   spareNotAvailable: '#1b96ff', // Light blue
 };
 
-export const TradeGroupStackedChart: React.FC<TradeGroupStackedChartProps> = ({ data, title }) => {
+export const TradeGroupStackedChart: React.FC<TradeGroupStackedChartProps> = ({ data }) => {
   // Calculate total for each row and sort by total
   const sortedData = [...data]
     .map(item => ({
@@ -31,13 +31,7 @@ export const TradeGroupStackedChart: React.FC<TradeGroupStackedChartProps> = ({ 
     .sort((a, b) => b.total - a.total);
 
   return (
-    <div className="chart-card h-full">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="chart-title mb-0">{title}</h3>
-        <span className="text-xs text-primary cursor-pointer hover:underline">
-          View Report (All Vehicles by Trade Group)
-        </span>
-      </div>
+    <div className="h-full">
       <div className="h-[350px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart

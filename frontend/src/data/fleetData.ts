@@ -11,6 +11,14 @@ export interface VehicleRecord {
   vehicleOwnership?: string;
   garageStatus?: string;
   vehicleReturnDate?: string;
+  // Service sheet fields
+  name?: string;
+  lastServiceDate?: string;
+  nextServiceDate?: string;
+  // Road tax sheet fields
+  lastRoadTax?: string;
+  nextRoadTax?: string;
+  nextRoadTaxEditable?: string;
 }
 
 // All Available Vehicles (Current Vehicles) - from 15.4_All_Available_Vehicles

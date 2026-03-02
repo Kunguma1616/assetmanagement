@@ -355,6 +355,24 @@ Output: {{"intent": "get_vehicles_by_location", "entity": null, "parameters": {{
 
 
 
+Example 16: "List out the bad drivers"
+
+Output: {{"intent": "get_drivers_by_score_range", "entity": null, "parameters": {{"min_score": 0, "max_score": 5}}, "source": "webfleet"}}
+
+
+
+Example 17: "Show me poor performing drivers" or "worst drivers"
+
+Output: {{"intent": "get_drivers_by_score_range", "entity": null, "parameters": {{"min_score": 0, "max_score": 5}}, "source": "webfleet"}}
+
+
+
+Example 18: "Show drivers with low scores"
+
+Output: {{"intent": "get_drivers_by_score_range", "entity": null, "parameters": {{"min_score": 0, "max_score": 5}}, "source": "webfleet"}}
+
+
+
 === AVAILABLE INTENTS ===
 
 
@@ -404,6 +422,7 @@ SALESFORCE INTENTS (vehicle records, allocations, costs):
 RULES:
 
 - "list driver scores", "show all driver scores", "get me driver scores", "list out driver scores" → list_webfleet_drivers
+- "bad drivers", "poor drivers", "low scoring drivers", "worst drivers", "drivers with low scores" → get_drivers_by_score_range with min_score=0, max_score=5
 - "drivers with score X" where X is a number → get_drivers_by_score  
 - "drivers with score above X" or "score higher than" → get_drivers_by_score_range
 - Any mention of "driver score", "optidrive", "driving score", "webfleet" → use Webfleet intents
@@ -411,6 +430,7 @@ RULES:
 - If user says "from webfleet" → always use webfleet source intents
 - Default driver/vehicle data goes to Salesforce unless "webfleet" is mentioned or it's about scores
 - If question has "list" or "show" or "get me" + "driver" + "score" → list_webfleet_drivers
+- IMPORTANT: Handle requests regardless of CAPITALIZATION - treat uppercase and lowercase the same
 
 
 

@@ -251,9 +251,10 @@ def get_engineers_with_scores():
         print(f"✅ Using {scores_with_data} cached scores")
         print(f"   Last updated: {_cache.get('last_updated', 'Unknown')}\n")
         
-        # ⚡ STEP 2: Get ALL Salesforce engineers (1 query)
-        print("🚀 Fetching engineers from Salesforce...")
+        # ⚡ STEP 2: Get ALL Salesforce engineers with their vehicle allocations
+        print("🚀 Fetching engineers and their vehicle assignments from Salesforce...")
         
+        # Get engineers
         engineer_query = """
             SELECT 
                 Id, 
@@ -269,7 +270,88 @@ def get_engineers_with_scores():
         result = sf.sf.query(engineer_query)
         all_engineers = result.get('records', [])
         
-        print(f"✅ Found {len(all_engineers)} active engineers\n")
+        print(f"✅ Found {len(all_engineers)} active engineers")
+        
+        # Get vehicle allocations for all engineers (including van numbers)
+        print("🚀 Fetching vehicle data and allocations...")
+        
+        # First: Get all vehicle van_numbers
+        vehicle_query = """
+            SELECT Id, Name, Van_Number__c
+            FROM Vehicle__c
+            LIMIT 5000
+        """
+        
+        try:
+            vehicle_result = sf.sf.query(vehicle_query)
+            all_vehicles = vehicle_result.get('records', [])
+            print(f"✅ Found {len(all_vehicles)} vehicles")
+            
+            # Build Vehicle ID → van_number mapping
+            vehicle_to_van = {}
+            for idx, vehicle in enumerate(all_vehicles):
+                vehicle_id = vehicle.get('Id', '')
+                van_number = vehicle.get('Van_Number__c', '')
+                vehicle_name = vehicle.get('Name', '')
+                
+                # Use Van_Number__c if available, otherwise use Name
+                display_name = van_number if van_number else vehicle_name
+                if not display_name:
+                    display_name = 'N/A'
+                
+                if vehicle_id:
+                    vehicle_to_van[vehicle_id] = display_name
+                
+                # Debug: show first 5 vehicles
+                if idx < 5:
+                    print(f"   Vehicle {vehicle_id[:10]}... → Van: '{van_number}' | Name: '{vehicle_name}' → Using: '{display_name}'")
+            
+            print(f"✅ Built vehicle van_number map: {len(vehicle_to_van)} vehicles")
+        except Exception as e:
+            print(f"⚠️ Error fetching vehicles: {e}")
+            import traceback
+            traceback.print_exc()
+            vehicle_to_van = {}
+        
+        # Second: Get active allocations by Service_Resource ID
+        print("🚀 Fetching active allocations...")
+        allocation_query = """
+            SELECT 
+                Service_Resource__c,
+                Vehicle__c,
+                Start_date__c
+            FROM Vehicle_Allocation__c
+            WHERE Service_Resource__c != null
+            AND Start_date__c <= TODAY
+            AND (End_date__c = NULL OR End_date__c >= TODAY)
+            ORDER BY Start_date__c DESC
+        """
+        
+        try:
+            allocation_result = sf.sf.query(allocation_query)
+            all_allocations = allocation_result.get('records', [])
+            print(f"✅ Found {len(all_allocations)} active allocations")
+            
+            # Build Service_Resource ID -> van_number mapping
+            service_resource_to_van = {}
+            for allocation in all_allocations:
+                service_resource_id = allocation.get('Service_Resource__c', '')
+                vehicle_id = allocation.get('Vehicle__c', '')
+                van_number = vehicle_to_van.get(vehicle_id, 'N/A')
+                
+                # Store most recent allocation for each engineer (only if not already mapped)
+                if service_resource_id and service_resource_id not in service_resource_to_van:
+                    service_resource_to_van[service_resource_id] = van_number
+                    if len(service_resource_to_van) <= 5:
+                        print(f"   Allocation: {service_resource_id[:10]}... → Vehicle {vehicle_id[:10]}... → Van: '{van_number}'")
+            
+            print(f"✅ Mapped {len(service_resource_to_van)} service resources to van numbers\n")
+            
+        except Exception as e:
+            print(f"⚠️ Error fetching allocations: {e}")
+            import traceback
+            traceback.print_exc()
+            service_resource_to_van = {}
         
         # ⚡ STEP 3: Match in memory (NO API calls!)
         print("🚀 Matching engineers with scores...")
@@ -279,6 +361,7 @@ def get_engineers_with_scores():
         not_matched = 0
         
         for engineer in all_engineers:
+            engineer_id = engineer.get('Id', '')
             engineer_name = engineer.get('Name', 'Unknown')
             
             # Get email
@@ -296,6 +379,9 @@ def get_engineers_with_scores():
             # Get score from cache (instant lookup, no API call!)
             driving_score = email_to_score.get(email_lower, 0)
             
+            # Get van_number from service resource mapping using engineer ID
+            van_number = service_resource_to_van.get(engineer_id, 'N/A')
+            
             if driving_score > 0:
                 matched += 1
             else:
@@ -308,7 +394,7 @@ def get_engineers_with_scores():
                 "rank": 0,
                 "name": engineer_name,
                 "email": engineer_email,
-                "van_number": "N/A",
+                "van_number": van_number,
                 "trade_group": trade_group,
                 "driving_score": driving_score,
                 "score_class": score_class
@@ -320,6 +406,11 @@ def get_engineers_with_scores():
         # Update ranks
         for idx, engineer in enumerate(engineers_list):
             engineer['rank'] = idx + 1
+        
+        # Debug: show top 5 engineers being returned
+        print(f"\n📤 TOP 5 ENGINEERS BEING SENT TO FRONTEND:")
+        for eng in engineers_list[:5]:
+            print(f"   {eng['rank']}. {eng['name']} → Van: '{eng['van_number']}' | Score: {eng['driving_score']}")
         
         print(f"\n{'='*80}")
         print(f"✅ COMPLETE!")
