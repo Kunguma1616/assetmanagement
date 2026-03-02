@@ -156,8 +156,16 @@ static_dir = "/app/static"
 
 app.mount("/assets", StaticFiles(directory=f"{static_dir}/assets"), name="assets")
 
+@app.get("/")
+async def serve_root():
+    return FileResponse(f"{static_dir}/index.html")
+
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
+    file_path = os.path.join(static_dir, full_path)
+    if full_path and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    return FileResponse(f"{static_dir}/index.html")
     file_path = os.path.join(static_dir, full_path)
     if full_path and os.path.isfile(file_path):
         return FileResponse(file_path)
