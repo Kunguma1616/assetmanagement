@@ -7,7 +7,6 @@ import sys
 import os
 import asyncio
 
-# Try to import Groq for AI features (optional)
 try:
     from groq import Groq
     GROQ_AVAILABLE = True
@@ -15,7 +14,6 @@ except ImportError:
     GROQ_AVAILABLE = False
     print("[WARNING] Groq library not installed. Install with: pip install groq")
 
-# Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from routes.dashboard import router as dashboard_router
@@ -33,19 +31,14 @@ from routes.uploadvehicle import router as upload_router
 from routes.cost import router as cost_router
 from routes.vehicle_condition import router as vehicle_condition_router
 
-# ─────────────────────────────────────────────────────────
-# GLOBAL DRIVER CACHE
-# ─────────────────────────────────────────────────────────
 GLOBAL_DRIVER_CACHE = []
 
-# Initialize FastAPI app
 app = FastAPI(
     title="Fleet Health Monitor API",
     description="Backend API for fleet management dashboard",
     version="1.0.0"
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -62,9 +55,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─────────────────────────────────────────────────────────
-# ROUTERS
-# ─────────────────────────────────────────────────────────
 app.include_router(asset_dashboard_router)
 app.include_router(dashboard_router)
 app.include_router(allocation_router)
@@ -81,11 +71,7 @@ app.include_router(vehicle_condition_router)
 app.include_router(cost_router)
 
 
-# ─────────────────────────────────────────────────────────
-# STARTUP EVENT — non-blocking background task
-# ─────────────────────────────────────────────────────────
 async def _background_cache_load():
-    """Runs after app is already up and listening on port 8080."""
     global GLOBAL_DRIVER_CACHE
     loop = asyncio.get_event_loop()
 
@@ -105,7 +91,7 @@ async def _background_cache_load():
     try:
         result = await asyncio.wait_for(
             loop.run_in_executor(None, _load),
-            timeout=60  # Give it 60s but never block port binding
+            timeout=60
         )
 
         if result and result.get("engineers"):
@@ -133,39 +119,32 @@ async def _background_cache_load():
 
 @app.on_event("startup")
 async def startup_event():
-    """
-    App starts and binds to PORT immediately.
-    Cache loads in the background — Cloud Run health check will pass.
-    """
     print("[STARTUP] App is up. Scheduling background cache load...")
     asyncio.create_task(_background_cache_load())
 
 
-# ─────────────────────────────────────────────────────────
-# HEALTH CHECK
-# ─────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
 
 
-# ─────────────────────────────────────────────────────────
-# SERVE FRONTEND STATIC FILES
-# ─────────────────────────────────────────────────────────
+# ─── SERVE FRONTEND ───────────────────────────────────────
 static_dir = "/app/static"
 
-app.mount("/assets", StaticFiles(directory=f"{static_dir}/assets"), name="assets")
+assets_path = f"{static_dir}/assets"
+if os.path.isdir(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+else:
+    print(f"[WARNING] Assets directory not found: {assets_path}")
+
 
 @app.get("/")
 async def serve_root():
     return FileResponse(f"{static_dir}/index.html")
 
+
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
-    file_path = os.path.join(static_dir, full_path)
-    if full_path and os.path.isfile(file_path):
-        return FileResponse(file_path)
-    return FileResponse(f"{static_dir}/index.html")
     file_path = os.path.join(static_dir, full_path)
     if full_path and os.path.isfile(file_path):
         return FileResponse(file_path)
