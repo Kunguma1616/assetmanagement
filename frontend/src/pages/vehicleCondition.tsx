@@ -71,7 +71,7 @@ const C = {
 } as const;
 
 const FONT = "'Mont', 'Montserrat', sans-serif";
-const API_BASE = "http://localhost:8000/api/vehicle-condition";
+const API_BASE = "/api/vehicle-condition";
 
 /* ── KPI Card Component ── */
 interface KPICardProps {
