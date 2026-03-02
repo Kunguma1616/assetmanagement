@@ -31,27 +31,49 @@ def get_mot_due_count(sf):
         return 0
 
 
+def get_service_due_count(sf):
+    """Helper function to get service due count using date field"""
+    print("🔄 [get_service_due_count] Starting Service query...")
+    try:
+        query = """
+            SELECT Id, Name
+            FROM Vehicle__c
+            WHERE Next_Service_Date__c >= TODAY
+            AND Next_Service_Date__c <= NEXT_N_DAYS:30
+            AND Leaver__c = false
+        """
+        print(f"🔍 [get_service_due_count] Executing: {query.strip()}")
+        vehicles = sf.execute_soql(query)
+        count = len(vehicles) if vehicles else 0
+        print(f"✅ [get_service_due_count] Found {count} vehicles with service due in 30 days")
+        return count
+    except Exception as e:
+        print(f"⚠️  [get_service_due_count] Query failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+
 def get_tax_due_count(sf):
     """Helper function to get Tax due count"""
     print("🔄 [get_tax_due_count] Starting Tax query...")
     try:
-        # Try to query Tax due vehicles - field may not exist
-        # Gracefully handle missing field by returning 0
         query = """
             SELECT Id, Name
             FROM Vehicle__c
-            WHERE Tax_Expiry_Date__c != NULL AND Tax_Expiry_Date__c <= NEXT_N_DAYS:30
+            WHERE Next_Road_Tax__c >= TODAY
+            AND Next_Road_Tax__c <= NEXT_N_DAYS:30
+            AND Leaver__c = false
         """
         print(f"🔍 [get_tax_due_count] Executing: {query.strip()}")
         vehicles = sf.execute_soql(query)
         count = len(vehicles) if vehicles else 0
-        print(f"✅ [get_tax_due_count] Found {count} vehicles with tax due <= 30 days")
+        print(f"✅ [get_tax_due_count] Found {count} vehicles with road tax due <= 30 days")
         if count > 0 and vehicles:
             print(f"   Sample: {vehicles[0]}")
         return count
     except Exception as e:
         print(f"⚠️  [get_tax_due_count] Tax field not available: {e}")
-        # Field doesn't exist or query failed - return 0
         return 0
 
 
@@ -204,105 +226,97 @@ def get_vehicle_summary():
     """
     try:
         sf = SalesforceService()
-        
-        # Fetch ALL vehicles
+
+        # Fetch ALL vehicles — only Status__c needed for counting
         all_vehicles_query = "SELECT Id, Status__c FROM Vehicle__c"
-        vehicles = sf.execute_soql(all_vehicles_query)
-        total = len(vehicles)
-        
-        print(f"📊 Total vehicles fetched: {total}")
-        
-        # Initialize status counts
+        vehicles = sf.execute_soql(all_vehicles_query) or []
+
+        print(f"📊 Total vehicles fetched (raw): {len(vehicles)}")
+
+        # Initialize status counts (due_service computed by date below)
         status_counts = {
             "allocated": 0,
             "garage": 0,
-            "due_service": 0,
             "spare_ready": 0,
             "reserved": 0,
             "written_off": 0,
         }
-        
-        # ACTUAL Salesforce status values
-        # Based on user's Salesforce data:
-        # Allocated: 233, Reserved: 4, Sold: 15, Spare: 12, Spare Not Available: 4, Written Off: 21
+
+        # Statuses excluded from "Current Vehicles"
+        EXCLUDED_STATUSES = {"Sold", "Written Off", "Written_Off"}
+
+        # Garage statuses — matches Salesforce report 15.7
+        GARAGE_STATUSES = {"Garage", "garage", "In Garage", "Under Repair"}
+
         status_mapping = {
-            # Allocated
-            "Allocated": "allocated",
-            "allocated": "allocated",
-            
-            # Garage/Service/Under Repair
-            "Garage": "garage",
-            "garage": "garage",
-            "In Garage": "garage",
-            "Under Repair": "garage",
-            
-            # Due Service
-            "Due for Service": "due_service",
-            "Due_Service": "due_service",
-            "Service Due": "due_service",
-            
-            # Spare Ready (includes all spare variants)
-            "Spare Ready": "spare_ready",
-            "Spare_Ready": "spare_ready",
-            "Spare": "spare_ready",
-            "Spare Tankers": "spare_ready",
-            "Spare in Garage": "spare_ready",
-            "Spare Not Available": "spare_ready",  # Include in spare count
-            
-            # Reserved
-            "Reserved": "reserved",
-            "reserved": "reserved",
-            
-            # Written Off
-            "Written Off": "written_off",
-            "Written_Off": "written_off",
-            
-            # Note: "Sold" not mapped - vehicles that are sold are not counted in active fleet
-            # Note: Unmapped statuses are silently ignored
+            "Allocated":          "allocated",
+            "allocated":          "allocated",
+            "Garage":             "garage",
+            "garage":             "garage",
+            "In Garage":          "garage",
+            "Under Repair":       "garage",
+            "Spare Ready":        "spare_ready",
+            "Spare_Ready":        "spare_ready",
+            "Spare":              "spare_ready",
+            "Spare Tankers":      "spare_ready",
+            "Spare in Garage":    "spare_ready",
+            "Spare Not Available":"spare_ready",
+            "Reserved":           "reserved",
+            "reserved":           "reserved",
+            "Written Off":        "written_off",
+            "Written_Off":        "written_off",
         }
-        
-        # Aggregate locally
+
+        # total = vehicles NOT Sold/Written Off
+        total = 0
         status_values_found = {}
         unmapped_statuses = {}
+
         for vehicle in vehicles:
             sf_status = vehicle.get("Status__c")
+
             if sf_status:
-                if sf_status not in status_values_found:
-                    status_values_found[sf_status] = 0
-                status_values_found[sf_status] += 1
-                
+                status_values_found[sf_status] = status_values_found.get(sf_status, 0) + 1
+
+                # Current Vehicles = everything except Sold / Written Off
+                if sf_status not in EXCLUDED_STATUSES:
+                    total += 1
+
                 response_key = status_mapping.get(sf_status)
                 if response_key:
                     status_counts[response_key] += 1
-                else:
-                    # Track unmapped statuses
-                    if sf_status not in unmapped_statuses:
-                        unmapped_statuses[sf_status] = 0
-                    unmapped_statuses[sf_status] += 1
-        
+                elif sf_status not in EXCLUDED_STATUSES:
+                    unmapped_statuses[sf_status] = unmapped_statuses.get(sf_status, 0) + 1
+
         print(f"✅ Status values found in Salesforce:")
         for status, count in sorted(status_values_found.items()):
             print(f"   '{status}': {count}")
+        print(f"✅ Current Vehicles (excl. Sold/Written Off): {total}")
+        print(f"✅ Garage (Status__c in GARAGE_STATUSES): {status_counts['garage']}")
         print(f"✅ Mapped status counts: {status_counts}")
         if unmapped_statuses:
-            print(f"⚠️  Unmapped statuses (not included in counts): {unmapped_statuses}")
-        
-        # Get MOT and Tax due counts using helper functions
+            print(f"⚠️  Unmapped statuses: {unmapped_statuses}")
+
+        # Get date-based counts (independent of Status__c)
+        print("📊 Getting Service due count...")
+        due_service = get_service_due_count(sf)
+
         print("📊 Getting MOT due count...")
         mot_due = get_mot_due_count(sf)
-        
+
         print("📊 Getting Tax due count...")
         tax_due = get_tax_due_count(sf)
-        
-        print(f"📊 SUMMARY RESULT: MOT={mot_due}, Tax={tax_due}")
-        
+
+        print(f"📊 SUMMARY RESULT: total={total}, Service={due_service}, MOT={mot_due}, Tax={tax_due}")
+
         return {
             "total": total,
             **status_counts,
+            "due_service": due_service,
             "mot_due": mot_due,
             "tax_due": tax_due,
         }
-        
+
     except Exception as e:
         print(f"❌ Dashboard error: {e}")
         import traceback
@@ -317,88 +331,118 @@ def get_vehicles_by_status(status: str):
     """
     try:
         sf = SalesforceService()
-        
-        # Map friendly status names to Salesforce values (allow multiple SF statuses)
-        status_map = {
-            "allocated": ["Allocated"],
-            "garage": ["Garage"],
-            "due_service": ["Due for Service", "Service Due", "Due_Service"],
-            "spare_ready": ["Spare", "Spare Not Available"],  # ACTUAL Salesforce values only
-            "reserved": ["Reserved"],
-            "written_off": ["Written Off"],
-            "sold": ["Sold"],
-            "total": [],  # Empty = return ALL vehicles
-            "current": [],  # Empty = return ALL vehicles
-        }
 
-        # 'current' or 'total' -> return all vehicles (no status filter)
         key = status.lower()
-        sf_values = status_map.get(key)
-        
-        # Build query based on status
-        if key == 'current' or key == 'total' or (sf_values is not None and len(sf_values) == 0):
-            where_clause = ""
-            sf_status = 'ALL'
-        elif sf_values and len(sf_values) > 1:
-            # Multiple values: use IN clause
-            values_str = ",".join([f"'{v}'" for v in sf_values])
-            where_clause = f"WHERE Status__c IN ({values_str})"
-            sf_status = " | ".join(sf_values)
-        elif sf_values and len(sf_values) == 1:
-            # Single value: use = clause
-            where_clause = f"WHERE Status__c = '{sf_values[0]}'"
-            sf_status = sf_values[0]
-        else:
-            # Unmapped status: treat as literal
-            where_clause = f"WHERE Status__c = '{status}'"
-            sf_status = status
 
-        query = f"""
-            SELECT Id, Name, Reg_No__c, Van_Number__c, Status__c, 
-                   Trade_Group__c, Vehicle_Type__c, Make_Model__c,
-                   Last_Service_Date__c, Next_Service_Date__c,
-                   Last_MOT_Date__c, Next_MOT_Date__c
-            FROM Vehicle__c
-            {where_clause}
-            ORDER BY Name
-        """
+        # ── Current Vehicles: exclude Sold and Written Off ──────────────────
+        if key in ('current', 'total'):
+            query = """
+                SELECT Id, Name, Reg_No__c, Van_Number__c, Status__c,
+                       Trade_Group__c, Vehicle_Type__c, Make_Model__c,
+                       Last_Service_Date__c, Next_Service_Date__c,
+                       Last_MOT_Date__c, Next_MOT_Date__c
+                FROM Vehicle__c
+                WHERE Status__c NOT IN ('Sold', 'Written Off')
+                ORDER BY Name
+            """
+            sf_status = 'Current (excl. Sold / Written Off)'
+
+        # ── Vehicles in Garage: Status__c matches Salesforce report 15.7 ───
+        elif key == 'garage':
+            query = """
+                SELECT Id, Name, Van_Number__c, Reg_No__c, Status__c,
+                       Trade_Group__c, Vehicle_Type__c, Make_Model__c,
+                       Last_Service_Date__c, Next_Service_Date__c,
+                       Last_MOT_Date__c, Next_MOT_Date__c
+                FROM Vehicle__c
+                WHERE Status__c IN ('Garage', 'In Garage', 'Under Repair')
+                ORDER BY Name
+            """
+            sf_status = 'Garage'
+
+        # ── Spare in Garage: Spare vehicles currently in for repair ─────────
+        elif key == 'spare_in_garage':
+            query = """
+                SELECT Id, Name, Van_Number__c, Reg_No__c, Status__c,
+                       Trade_Group__c, Vehicle_Type__c, Make_Model__c
+                FROM Vehicle__c
+                WHERE Status__c = 'Spare in Garage'
+                ORDER BY Name
+            """
+            sf_status = 'Spare in Garage'
+
+        else:
+            # Map other friendly status names to Salesforce values
+            status_map = {
+                "allocated":    ["Allocated"],
+                "due_service":  ["Due for Service", "Service Due", "Due_Service"],
+                "spare_ready":  ["Spare", "Spare Not Available"],
+                "reserved":     ["Reserved"],
+                "written_off":  ["Written Off"],
+                "sold":         ["Sold"],
+            }
+            sf_values = status_map.get(key)
+
+            if sf_values and len(sf_values) > 1:
+                values_str = ",".join([f"'{v}'" for v in sf_values])
+                where_clause = f"WHERE Status__c IN ({values_str})"
+                sf_status = " | ".join(sf_values)
+            elif sf_values and len(sf_values) == 1:
+                where_clause = f"WHERE Status__c = '{sf_values[0]}'"
+                sf_status = sf_values[0]
+            else:
+                where_clause = f"WHERE Status__c = '{status}'"
+                sf_status = status
+
+            query = f"""
+                SELECT Id, Name, Reg_No__c, Van_Number__c, Status__c,
+                       Trade_Group__c, Vehicle_Type__c, Make_Model__c,
+                       Last_Service_Date__c, Next_Service_Date__c,
+                       Last_MOT_Date__c, Next_MOT_Date__c
+                FROM Vehicle__c
+                {where_clause}
+                ORDER BY Name
+            """
         
         print(f"🔍 Query: {query[:100]}...")
-        vehicles = sf.execute_soql(query)
+        vehicles = sf.execute_soql(query) or []
 
         print(f"🔍 Found {len(vehicles)} vehicles with status '{sf_status}'")
 
-        # If we have vehicles, aggregate cost data from Vehicle_Cost__c
-        if vehicles:
+        # Aggregate cost data — skip if too many vehicles to avoid SOQL limits
+        if vehicles and len(vehicles) <= 500:
             vehicle_ids = [v.get('Id') for v in vehicles if v.get('Id')]
             if vehicle_ids:
                 ids_escaped = ", ".join([f"'{vid}'" for vid in vehicle_ids])
 
-                # Total cost per vehicle
-                cost_query = f"""
-                    SELECT Vehicle__c, SUM(Payment_value__c) total
-                    FROM Vehicle_Cost__c
-                    WHERE Vehicle__c IN ({ids_escaped})
-                    GROUP BY Vehicle__c
-                """
-                cost_results = sf.execute_soql(cost_query)
-                cost_map = {r.get('Vehicle__c'): r.get('total', 0) for r in cost_results}
+                try:
+                    # Total cost per vehicle
+                    cost_query = f"""
+                        SELECT Vehicle__c, SUM(Payment_value__c) total
+                        FROM Vehicle_Cost__c
+                        WHERE Vehicle__c IN ({ids_escaped})
+                        GROUP BY Vehicle__c
+                    """
+                    cost_results = sf.execute_soql(cost_query) or []
+                    cost_map = {r.get('Vehicle__c'): r.get('total', 0) for r in cost_results}
 
-                # Maintenance-related cost per vehicle (Type__c contains Service or Maint)
-                maint_query = f"""
-                    SELECT Vehicle__c, SUM(Payment_value__c) maintenance_total
-                    FROM Vehicle_Cost__c
-                    WHERE Vehicle__c IN ({ids_escaped}) AND (Type__c LIKE '%Service%' OR Type__c LIKE '%Maint%')
-                    GROUP BY Vehicle__c
-                """
-                maint_results = sf.execute_soql(maint_query)
-                maint_map = {r.get('Vehicle__c'): r.get('maintenance_total', 0) for r in maint_results}
+                    # Maintenance-related cost per vehicle
+                    maint_query = f"""
+                        SELECT Vehicle__c, SUM(Payment_value__c) maintenance_total
+                        FROM Vehicle_Cost__c
+                        WHERE Vehicle__c IN ({ids_escaped}) AND (Type__c LIKE '%Service%' OR Type__c LIKE '%Maint%')
+                        GROUP BY Vehicle__c
+                    """
+                    maint_results = sf.execute_soql(maint_query) or []
+                    maint_map = {r.get('Vehicle__c'): r.get('maintenance_total', 0) for r in maint_results}
 
-                # Attach cost values to vehicle records
-                for v in vehicles:
-                    vid = v.get('Id')
-                    v['service_cost'] = cost_map.get(vid, 0)
-                    v['maintenance_cost'] = maint_map.get(vid, 0)
+                    # Attach cost values to vehicle records
+                    for v in vehicles:
+                        vid = v.get('Id')
+                        v['service_cost'] = cost_map.get(vid, 0)
+                        v['maintenance_cost'] = maint_map.get(vid, 0)
+                except Exception as cost_err:
+                    print(f"⚠️  Cost query failed (non-fatal): {cost_err}")
         
         return {
             "status": sf_status,
@@ -411,6 +455,33 @@ def get_vehicles_by_status(status: str):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/vehicles-service-due")
+def get_vehicles_service_due(days: int = 30):
+    """
+    Get vehicles with service due within the next `days` days (default 30).
+    """
+    try:
+        sf = SalesforceService()
+        query = f"""
+            SELECT Id, Name, Van_Number__c, Reg_No__c, Trade_Group__c,
+                   Last_Service_Date__c, Next_Service_Date__c,
+                   Vehicle_Type__c, Vehicle_Ownership__c
+            FROM Vehicle__c
+            WHERE Next_Service_Date__c >= TODAY
+            AND Next_Service_Date__c <= NEXT_N_DAYS:{days}
+            AND Leaver__c = false
+            ORDER BY Trade_Group__c ASC, Van_Number__c ASC
+        """
+        vehicles = sf.execute_soql(query)
+        print(f"✅ Service due vehicles found: {len(vehicles)}")
+        return {"count": len(vehicles), "vehicles": vehicles}
+    except Exception as e:
+        print(f"❌ Error fetching service due vehicles: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"count": 0, "vehicles": []}
 
 
 @router.get("/vehicles-mot-due")
@@ -462,12 +533,14 @@ def get_vehicles_tax_due(days: int = 30):
     try:
         sf = SalesforceService()
         query = f"""
-            SELECT Id, Name, Reg_No__c, Van_Number__c, Status__c,
-                   Trade_Group__c, Vehicle_Type__c, Make_Model__c,
-                   Last_Tax_Date__c, Next_Tax_Date__c
+            SELECT Id, Name, Van_Number__c, Reg_No__c, Trade_Group__c,
+                   Last_Road_Tax__c, Next_Road_Tax__c, Next_Road_Tax_Editable__c,
+                   Vehicle_Type__c, Vehicle_Ownership__c
             FROM Vehicle__c
-            WHERE Next_Tax_Date__c != NULL AND Next_Tax_Date__c <= NEXT_N_DAYS:{days}
-            ORDER BY Next_Tax_Date__c ASC
+            WHERE Next_Road_Tax__c >= TODAY
+            AND Next_Road_Tax__c <= NEXT_N_DAYS:{days}
+            AND Leaver__c = false
+            ORDER BY Trade_Group__c ASC, Van_Number__c ASC
         """
         vehicles = sf.execute_soql(query)
         print(f"✅ Tax due vehicles found: {len(vehicles)}")
@@ -476,22 +549,7 @@ def get_vehicles_tax_due(days: int = 30):
         print(f"❌ Error fetching road tax due vehicles: {e}")
         import traceback
         traceback.print_exc()
-        # Try alternative field name
-        try:
-            print("🔄 Trying alternative field name Tax_Due_Date__c...")
-            query_alt = f"""
-                SELECT Id, Name, Reg_No__c, Van_Number__c, Status__c,
-                       Trade_Group__c, Vehicle_Type__c, Make_Model__c
-                FROM Vehicle__c
-                WHERE Tax_Due_Date__c != NULL AND Tax_Due_Date__c <= NEXT_N_DAYS:{days}
-                ORDER BY Tax_Due_Date__c ASC
-            """
-            vehicles_alt = sf.execute_soql(query_alt)
-            print(f"✅ Tax due vehicles (alt) found: {len(vehicles_alt)}")
-            return {"count": len(vehicles_alt), "vehicles": vehicles_alt}
-        except:
-            print("⚠️  Alternative field name also failed, returning empty list")
-            return {"count": 0, "vehicles": []}
+        return {"count": 0, "vehicles": []}
 
 
 @router.get("/cost-analysis")
