@@ -49,4 +49,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Run with uvicorn directly (faster startup, respects PORT env var)
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --timeout-keep-alive 75"]
