@@ -5,6 +5,7 @@ import {
   Users, Award, RefreshCw, Star, Medal, Target, Zap,
 } from 'lucide-react';
 import { API_ENDPOINTS } from '@/config/api';
+import { getTradeGroup, getAllTradeGroups } from '@/config/tradeMapping';
 
 // ── Brand palette (exact colors.ts) ──────────────────────────────────────────
 const C = {
@@ -197,6 +198,7 @@ const Webfleet: React.FC = () => {
   const [stats,     setStats]     = useState<Statistics | null>(null);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
+  const [selectedTradeGroup, setSelectedTradeGroup] = useState<string | null>(null);
 
   useEffect(() => { fetchEngineers(); }, []);
 
@@ -222,7 +224,7 @@ const Webfleet: React.FC = () => {
           name:        d.name,
           email:       d.email       || 'N/A',
           van_number:  d.van_number  || 'N/A',
-          trade_group: d.trade_group || 'N/A',
+          trade_group: getTradeGroup(d.trade_group || 'N/A'),
           score:       d.score       || 0,
           score_class: d.score_class || 'poor',
         }));
@@ -267,7 +269,13 @@ const Webfleet: React.FC = () => {
   // ── Avatar initials ───────────────────────────────────────────────────────
   const initials = (name: string) =>
     name.split(' ').map(n => n[0] ?? '').join('').slice(0, 2).toUpperCase();
+  // ── Get unique trade groups ────────────────────────────────────────────
+  const tradeGroups = getAllTradeGroups();
 
+  // ── Filter engineers based on selected trade group ──────────────────────
+  const filteredEngineers = selectedTradeGroup
+    ? engineers.filter(e => e.trade_group === selectedTradeGroup)
+    : engineers;
   return (
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: FONT }}>
 
@@ -434,7 +442,6 @@ const Webfleet: React.FC = () => {
               {/* Right — breakdown pills */}
               <div style={{ display: 'flex', gap: 10 }}>
                 {[
-                  { label: 'Fair',              val: stats.fair,              color: C.orange, bg: C.orangeSubtle, border: C.orangeBorder },
                   { label: 'Needs Improvement', val: stats.needs_improvement, color: C.orange, bg: C.orangeSubtle, border: C.orangeBorder },
                   { label: 'Poor',              val: stats.poor,              color: C.red,    bg: C.redSubtle,    border: C.redBorder    },
                 ].map(item => (
@@ -464,13 +471,13 @@ const Webfleet: React.FC = () => {
           border: `1px solid ${C.borderSubtle}`,
           overflow: 'hidden',
         }}>
-          {/* Table title bar */}
+          {/* Table title bar with filter */}
           <div style={{
             padding: '22px 32px',
             borderBottom: `1px solid ${C.borderSubtle}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20,
           }}>
-            <div>
+            <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: 19, fontWeight: 900, color: C.title, margin: '0 0 3px', fontFamily: FONT }}>
                 Engineer Performance Ranking
               </h2>
@@ -478,12 +485,53 @@ const Webfleet: React.FC = () => {
                 Sorted by driving score — top performers first
               </p>
             </div>
+
+            {/* Trade Group Filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 350 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: C.body, fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                Trade Group:
+              </label>
+              <select
+                value={selectedTradeGroup || ''}
+                onChange={(e) => setSelectedTradeGroup(e.target.value || null)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 10,
+                  border: `1.5px solid ${C.blueBorder}`,
+                  background: C.blueSubtle,
+                  color: C.title,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontFamily: FONT,
+                  cursor: 'pointer',
+                  flex: 1,
+                  outline: 'none',
+                  transition: 'all 0.2s',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = C.blue;
+                  e.currentTarget.style.boxShadow = `0 0 0 3px ${C.blueSubtle}`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = C.blueBorder;
+                }}
+              >
+                <option value="">All Trade Groups</option>
+                {tradeGroups.map(tg => (
+                  <option key={tg} value={tg}>
+                    {tg}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div style={{
               background: C.blueSubtle, border: `1px solid ${C.blueBorder}`,
               borderRadius: 20, padding: '6px 16px',
-              fontSize: 12, fontWeight: 700, color: C.blue, fontFamily: FONT,
+              fontSize: 12, fontWeight: 700, color: C.blue, fontFamily: FONT, whiteSpace: 'nowrap',
             }}>
-              {engineers.length} engineers
+              {filteredEngineers.length} engineers
             </div>
           </div>
 
@@ -515,13 +563,13 @@ const Webfleet: React.FC = () => {
               </thead>
 
               <tbody>
-                {engineers.length === 0 ? (
+                {filteredEngineers.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ padding: '60px 20px', textAlign: 'center', color: C.gray, fontSize: 14, fontFamily: FONT }}>
                       No engineers found
                     </td>
                   </tr>
-                ) : engineers.map((eng) => {
+                ) : filteredEngineers.map((eng) => {
                   const scoreCfg = cfg(eng.score_class);
                   const isTop3   = eng.rank <= 3;
                   return (
@@ -619,21 +667,20 @@ const Webfleet: React.FC = () => {
           </div>
 
           {/* Table footer */}
-          {engineers.length > 0 && (
+          {filteredEngineers.length > 0 && (
             <div style={{
               padding: '14px 28px',
               borderTop: `1px solid ${C.borderSubtle}`,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <p style={{ fontSize: 11, color: C.gray, margin: 0, fontFamily: FONT, fontWeight: 600 }}>
-                Showing <b style={{ color: C.body }}>{engineers.length}</b> engineers · Sorted by score descending
+                Showing <b style={{ color: C.body }}>{filteredEngineers.length}</b> engineers {selectedTradeGroup && `· ${selectedTradeGroup}`} · Sorted by score descending
               </p>
               {/* Legend */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {[
                   { label: 'Excellent', color: C.yellowDark },
                   { label: 'Good',      color: C.green      },
-                  { label: 'Fair',      color: C.orange     },
                   { label: 'Poor',      color: C.red        },
                 ].map(l => (
                   <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
