@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { getTradeGroup, getAllTradeGroups } from '@/config/tradeMapping';
 
 /* ── Type Definitions ── */
 interface SubmittedVCR {
@@ -6,6 +7,7 @@ interface SubmittedVCR {
   vanName: string;
   regNo: string;
   engineerName: string;
+  tradeGroup?: string;
   latestVcrDate: string;
   daysSince: number;
   status: "Submitted";
@@ -16,6 +18,7 @@ interface NotSubmittedVCR {
   vanName: string;
   regNo: string;
   engineerName: string;
+  tradeGroup?: string;
   latestVcrDate: string | null;
   daysSince: number | null;
   status: "Missing" | "Overdue";
@@ -575,6 +578,7 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
 /* ── Main Component ── */
 const VehicleConditionDashboard: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [engineerTrades, setEngineerTrades] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
@@ -585,15 +589,62 @@ const VehicleConditionDashboard: React.FC = () => {
   const [modalOpen, setModalOpen] = useState<"submitted" | "notSubmitted" | null>(null);
   const [filterMode, setFilterMode] = useState<'today' | 'yesterday' | '7days' | null>(null);
   const [filterDate, setFilterDate] = useState<string>("");
+  const [tradeGroupFilter, setTradeGroupFilter] = useState<string>("");
   const [vcrPopup, setVcrPopup] = useState<{ result: SearchResult | null; loading: boolean; open: boolean }>({
     result: null,
     loading: false,
     open: false,
   });
 
+  // Load engineer trades from webfleet data
+  const loadEngineerTrades = async () => {
+    try {
+      console.log('📥 Fetching /api/webfleet/engineers...');
+      const res = await fetch('/api/webfleet/engineers');
+      if (!res.ok) throw new Error(`Failed to load engineers: ${res.status}`);
+      const data = await res.json();
+      console.log('📦 Raw API response total:', data.total);
+      
+      const trades: Record<string, string> = {};
+      
+      // Extract engineers from response - try multiple possible paths
+      const engineersList = data.engineers || data.drivers || data.data || [];
+      console.log('🔍 Found', engineersList.length, 'engineers in response');
+      
+      engineersList.forEach((engineer: any, idx: number) => {
+        let name = (engineer.name || engineer.engineer || engineer.engineerName || '').trim();
+        const trade = (engineer.trade_group || engineer.tradeGroup || engineer.trade || '').trim();
+        
+        if (name && trade) {
+          // Extract clean name from API too (remove parentheses and plus signs)
+          const cleanName = name
+            .split('(')[0]
+            .split('+')[0]
+            .trim();
+          
+          const mappedTrade = getTradeGroup(trade);
+          
+          // Store both the clean name and the full name with suffixes
+          trades[cleanName] = mappedTrade;
+          trades[name] = mappedTrade;  // Also store full name for direct matching
+          
+          if (idx < 5) {
+            console.log(`  [${idx}] full: "${name}" → clean: "${cleanName}" → trade: "${trade}" → mapped: "${mappedTrade}"`);
+          }
+        }
+      });
+      
+      console.log('[OK] Engineer trades loaded:', Object.keys(trades).length, 'name variants');
+      setEngineerTrades(trades);
+    } catch (e) {
+      console.error("✗ Failed to load engineer trades:", e);
+    }
+  };
+
   // Load dashboard on mount
   useEffect(() => {
     loadDashboard();
+    loadEngineerTrades();
   }, []);
 
   const loadDashboard = async () => {
@@ -659,7 +710,41 @@ const VehicleConditionDashboard: React.FC = () => {
   const yesterdayStr = toDateStr(yesterdayDate);
   const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  const filteredSubmitted = (dashboard?.submitted || []).filter((v) => {
+  // Enrich data with trade groups
+  const enrichWithTrades = <T extends { engineerName: string }>(items: T[]): (T & { tradeGroup?: string })[] => {
+    console.log('🔍 Enriching', items.length, 'items with trades. Available trades:', Object.keys(engineerTrades).length);
+    
+    return items.map((item, idx) => {
+      // Extract clean name (remove parentheses info like "(W6) +SM" → "Samuel Bromley")
+      const fullName = item.engineerName;
+      const cleanName = fullName
+        .split('(')[0]  // Remove everything after and including (
+        .split('+')[0]  // Remove everything after and including +
+        .trim();
+      
+      // Try matching strategies in order
+      let tradeGroup = 
+        engineerTrades[cleanName] ||                         // Exact match on clean name
+        engineerTrades[fullName.trim()] ||                   // Exact match on full name
+        engineerTrades[fullName] ||                          // Try without trim
+        Object.entries(engineerTrades).find(
+          ([key]) => key.toLowerCase() === cleanName.toLowerCase()
+        )?.[1] ||                                             // Case-insensitive match
+        'N/A';
+      
+      // Log first 3 items for debugging
+      if (idx < 3) {
+        console.log(`  [${idx}] "${fullName}" → clean: "${cleanName}" → trade: "${tradeGroup}"`);
+      }
+      
+      return {
+        ...item,
+        tradeGroup
+      };
+    });
+  };
+
+  const filteredSubmitted = enrichWithTrades((dashboard?.submitted || []).filter((v) => {
     if (filterDate) return v.latestVcrDate === filterDate;
     if (!filterMode) return true;
     if (!v.latestVcrDate) return false;
@@ -667,7 +752,11 @@ const VehicleConditionDashboard: React.FC = () => {
     if (filterMode === 'yesterday') return v.latestVcrDate === yesterdayStr;
     if (filterMode === '7days') return new Date(v.latestVcrDate) >= sevenDaysAgo;
     return true;
-  });
+  })).filter(v => !tradeGroupFilter || v.tradeGroup === tradeGroupFilter);
+
+  const enrichedNotSubmitted = enrichWithTrades(dashboard?.notSubmitted || []).filter(
+    v => !tradeGroupFilter || v.tradeGroup === tradeGroupFilter
+  );
 
   const isFiltered = !!(filterMode || filterDate);
   const totalAllocated = dashboard?.totalAllocated || 0;
@@ -687,16 +776,18 @@ const VehicleConditionDashboard: React.FC = () => {
     : 'Overdue or never submitted';
 
   const submittedColumns: TableColumn[] = [
-    { key: "vanName", label: "Van Number", width: "15%" },
-    { key: "engineerName", label: "Engineer", width: "20%" },
+    { key: "vanName", label: "Van Number", width: "12%" },
+    { key: "engineerName", label: "Engineer", width: "18%" },
+    { key: "tradeGroup", label: "Trade Group", width: "18%" },
     { key: "latestVcrDate", label: "Last Report", width: "15%" },
     { key: "daysSince", label: "Days Since", width: "12%" },
     { key: "status", label: "Status", width: "12%" },
   ];
 
   const notSubmittedColumns: TableColumn[] = [
-    { key: "vanName", label: "Van Number", width: "15%" },
-    { key: "engineerName", label: "Engineer", width: "20%" },
+    { key: "vanName", label: "Van Number", width: "12%" },
+    { key: "engineerName", label: "Engineer", width: "18%" },
+    { key: "tradeGroup", label: "Trade Group", width: "18%" },
     { key: "latestVcrDate", label: "Last Report", width: "15%" },
     { key: "daysSince", label: "Days Overdue", width: "12%" },
     { key: "status", label: "Status", width: "12%" },
@@ -1019,10 +1110,39 @@ const VehicleConditionDashboard: React.FC = () => {
             onBlur={(e) => ((e.target as HTMLInputElement).style.borderColor = filterDate ? C.primary.default : C.border.subtle)}
           />
 
+          <span style={{ color: C.gray.disabled, fontSize: "13px" }}>|</span>
+
+          {/* Trade Group picklist */}
+          <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>
+            Trade Group
+          </span>
+          <select
+            value={tradeGroupFilter}
+            onChange={(e) => setTradeGroupFilter(e.target.value)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: "8px",
+              border: `1px solid ${tradeGroupFilter ? C.primary.default : C.border.subtle}`,
+              fontSize: "13px",
+              fontFamily: FONT,
+              outline: "none",
+              color: tradeGroupFilter ? C.primary.default : C.gray.subtle,
+              fontWeight: tradeGroupFilter ? 700 : 400,
+              background: tradeGroupFilter ? C.surface.primarySubtle : C.gray.negative,
+              cursor: "pointer",
+              minWidth: "160px",
+            }}
+          >
+            <option value="">All Trade Groups</option>
+            {getAllTradeGroups().map((tg) => (
+              <option key={tg} value={tg}>{tg}</option>
+            ))}
+          </select>
+
           {/* Clear button */}
-          {isFiltered && (
+          {(isFiltered || tradeGroupFilter) && (
             <button
-              onClick={() => { setFilterMode(null); setFilterDate(""); }}
+              onClick={() => { setFilterMode(null); setFilterDate(""); setTradeGroupFilter(""); }}
               style={{
                 padding: "8px 14px",
                 borderRadius: "8px",
@@ -1040,10 +1160,10 @@ const VehicleConditionDashboard: React.FC = () => {
           )}
 
           {/* Result count hint */}
-          {isFiltered && (
+          {(isFiltered || tradeGroupFilter) && (
             <span style={{ fontSize: "12px", color: C.gray.caption }}>
-              {filteredSubmitted.length} submission{filteredSubmitted.length !== 1 ? "s" : ""}
-              {filterDate ? ` on ${filterDate}` : filterMode === 'today' ? ' today' : filterMode === 'yesterday' ? ' yesterday' : ' in last 7 days'}
+              {filteredSubmitted.length} submitted · {enrichedNotSubmitted.length} not submitted
+              {tradeGroupFilter ? ` · ${tradeGroupFilter}` : ""}
             </span>
           )}
         </div>
@@ -1059,7 +1179,7 @@ const VehicleConditionDashboard: React.FC = () => {
 
         <Table
           title="✗ NOT SUBMITTED"
-          data={dashboard?.notSubmitted || []}
+          data={enrichedNotSubmitted}
           columns={notSubmittedColumns}
           emptyMessage="All vehicles have submitted reports!"
         />
@@ -1214,7 +1334,7 @@ const VehicleConditionDashboard: React.FC = () => {
       <ListModal
         isOpen={modalOpen === "submitted"}
         title="✓ SUBMITTED"
-        data={dashboard?.submitted || []}
+        data={enrichWithTrades(dashboard?.submitted || [])}
         columns={submittedColumns}
         onClose={() => setModalOpen(null)}
         color="green"
@@ -1223,7 +1343,7 @@ const VehicleConditionDashboard: React.FC = () => {
       <ListModal
         isOpen={modalOpen === "notSubmitted"}
         title="✗ NOT SUBMITTED"
-        data={dashboard?.notSubmitted || []}
+        data={enrichedNotSubmitted}
         columns={notSubmittedColumns}
         onClose={() => setModalOpen(null)}
         color="red"
