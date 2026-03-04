@@ -458,7 +458,7 @@ def search_vcr_by_van(van_number_or_reg: str):
                         "id": img["Id"],
                         "title": img.get("Title", "Image"),
                         "fileExtension": img.get("FileExtension", ""),
-                        "imageUrl": f"http://localhost:8000/api/vehicle-condition/image/{img['Id']}"
+                        "imageUrl": f"/api/vehicle-condition/image/{img['Id']}"
                     })
         
         return {
@@ -594,7 +594,7 @@ def get_single_form_with_images(form_id: str):
                 images.append({
                     "id": img["Id"],
                     "title": img.get("Title", "Image"),
-                    "url": f"http://localhost:8000/api/vehicle-condition/image/{img['Id']}"
+                    "url": f"/api/vehicle-condition/image/{img['Id']}"
                 })
 
     return {"form": form_data, "images": images}
