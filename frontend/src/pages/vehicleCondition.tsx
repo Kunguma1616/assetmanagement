@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { getTradeGroup, getAllTradeGroups } from '@/config/tradeMapping';
+import { useUserTrade } from '@/hooks/useUserTrade';
+import { Lock } from 'lucide-react';
 
 /* ── Type Definitions ── */
 interface SubmittedVCR {
@@ -595,6 +597,7 @@ const VehicleConditionDashboard: React.FC = () => {
     loading: false,
     open: false,
   });
+  const { userTrade, userName, showsAllTrades, canViewTrade } = useUserTrade();
 
   // Load engineer trades from webfleet data
   const loadEngineerTrades = async () => {
@@ -643,20 +646,46 @@ const VehicleConditionDashboard: React.FC = () => {
 
   // Load dashboard on mount
   useEffect(() => {
+    console.log(`[vehicleCondition] useEffect triggered. userTrade: ${userTrade}`);
+    // Auto-restrict trade group filter if user has trade restriction
+    if (userTrade && userTrade !== 'ALL') {
+      console.log(`🔒 VCR: Auto-restricting view to ${userTrade}`);
+      setTradeGroupFilter(userTrade);
+    }
+    
     loadDashboard();
     loadEngineerTrades();
-  }, []);
+  }, [userTrade]);
 
   const loadDashboard = async () => {
     try {
+      console.log('[vehicleCondition] loadDashboard starting...');
       setLoading(true);
-      const res = await fetch(`${API_BASE}/compliance/dashboard/all-allocated`);
-      if (!res.ok) throw new Error("Failed to load dashboard");
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+      
+      const res = await fetch(`${API_BASE}/compliance/dashboard/all-allocated`, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      console.log(`[vehicleCondition] API response status: ${res.status}`);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to load dashboard: ${res.status} ${errorText}`);
+      }
       const data = await res.json();
+      console.log(`[vehicleCondition] Dashboard loaded successfully. Total allocated: ${data.totalAllocated}`);
       setDashboard(data);
-    } catch (e) {
-      console.error("Dashboard error:", e);
+    } catch (e: any) {
+      const errorMsg = e.name === 'AbortError' 
+        ? "[vehicleCondition] Request timeout - API took too long to respond"
+        : `[vehicleCondition] Dashboard error: ${e.message}`;
+      console.error(errorMsg);
     } finally {
+      console.log('[vehicleCondition] loadDashboard finished');
       setLoading(false);
     }
   };
@@ -744,26 +773,37 @@ const VehicleConditionDashboard: React.FC = () => {
     });
   };
 
-  const filteredSubmitted = enrichWithTrades((dashboard?.submitted || []).filter((v) => {
-    if (filterDate) return v.latestVcrDate === filterDate;
-    if (!filterMode) return true;
-    if (!v.latestVcrDate) return false;
-    if (filterMode === 'today') return v.latestVcrDate === todayStr;
-    if (filterMode === 'yesterday') return v.latestVcrDate === yesterdayStr;
-    if (filterMode === '7days') return new Date(v.latestVcrDate) >= sevenDaysAgo;
-    return true;
-  })).filter(v => !tradeGroupFilter || v.tradeGroup === tradeGroupFilter);
+  const enrichedSubmitted = enrichWithTrades(dashboard?.submitted || []);
+  const enrichedNotSubmitted = enrichWithTrades(dashboard?.notSubmitted || []);
 
-  const enrichedNotSubmitted = enrichWithTrades(dashboard?.notSubmitted || []).filter(
-    v => !tradeGroupFilter || v.tradeGroup === tradeGroupFilter
+  // ✅ CRITICAL: When user has trade restriction, ALWAYS filter to their trade only
+  const actualTradeFilter = !showsAllTrades() ? userTrade : tradeGroupFilter;
+
+  const filteredSubmitted = enrichedSubmitted
+    .filter((v) => {
+      if (filterDate) return v.latestVcrDate === filterDate;
+      if (!filterMode) return true;
+      if (!v.latestVcrDate) return false;
+      if (filterMode === 'today') return v.latestVcrDate === todayStr;
+      if (filterMode === 'yesterday') return v.latestVcrDate === yesterdayStr;
+      if (filterMode === '7days') return new Date(v.latestVcrDate) >= sevenDaysAgo;
+      return true;
+    })
+    .filter(v => !actualTradeFilter || v.tradeGroup === actualTradeFilter);
+
+  const filteredNotSubmitted = enrichedNotSubmitted.filter(
+    v => !actualTradeFilter || v.tradeGroup === actualTradeFilter
   );
 
-  const isFiltered = !!(filterMode || filterDate);
-  const totalAllocated = dashboard?.totalAllocated || 0;
-  const displaySubmittedCount = isFiltered ? filteredSubmitted.length : (dashboard?.submittedCount || 0);
-  const displayNotSubmittedCount = isFiltered
-    ? totalAllocated - filteredSubmitted.length
-    : overduCount + missingCount;
+  const isFiltered = !!(filterMode || filterDate || actualTradeFilter);
+  
+  // ✅ For restricted users, base totals on filtered data only
+  const totalAllocatedForUser = !showsAllTrades() 
+    ? (filteredSubmitted.length + filteredNotSubmitted.length)
+    : (dashboard?.totalAllocated || 0);
+    
+  const displaySubmittedCount = filteredSubmitted.length;
+  const displayNotSubmittedCount = filteredNotSubmitted.length;
   const displaySubmittedSubtext = filterDate ? `Submitted on ${filterDate}`
     : filterMode === 'today' ? 'Submitted today'
     : filterMode === 'yesterday' ? 'Submitted yesterday'
@@ -840,12 +880,29 @@ const VehicleConditionDashboard: React.FC = () => {
         }}
       >
         <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
-          <h1 style={{ fontSize: "28px", fontWeight: 700, color: C.text.title, margin: "0 0 8px 0" }}>
-            14-Day Vehicle Condition Report
-          </h1>
-          <p style={{ fontSize: "14px", color: C.gray.caption, margin: 0 }}>
-            VCR Compliance Dashboard • As of {dashboard?.asOfDate}
-          </p>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <h1 style={{ fontSize: "28px", fontWeight: 700, color: C.text.title, margin: "0 0 8px 0" }}>
+                14-Day Vehicle Condition Report
+              </h1>
+              <p style={{ fontSize: "14px", color: C.gray.caption, margin: 0 }}>
+                VCR Compliance Dashboard • As of {dashboard?.asOfDate}
+              </p>
+            </div>
+            {!showsAllTrades() && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 14px', borderRadius: 10,
+                background: `${C.warning.default}15`, border: `1.5px solid ${C.warning.default}`,
+                whiteSpace: 'nowrap',
+              }}>
+                <Lock style={{ width: 16, height: 16, color: C.warning.default }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.warning.default, fontFamily: FONT }}>
+                  Viewing {userTrade} only
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1019,8 +1076,8 @@ const VehicleConditionDashboard: React.FC = () => {
         <div style={{ display: "flex", gap: "16px", marginBottom: "40px", flexWrap: "wrap" }}>
           <KPICard
             label="Total Allocated"
-            value={dashboard?.totalAllocated || 0}
-            subtext="Active Vehicles"
+            value={totalAllocatedForUser}
+            subtext={!showsAllTrades() ? `${userTrade} trade only` : "Active Vehicles"}
             color="blue"
             icon="🚐"
           />
@@ -1112,32 +1169,38 @@ const VehicleConditionDashboard: React.FC = () => {
 
           <span style={{ color: C.gray.disabled, fontSize: "13px" }}>|</span>
 
-          {/* Trade Group picklist */}
-          <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>
-            Trade Group
-          </span>
-          <select
-            value={tradeGroupFilter}
-            onChange={(e) => setTradeGroupFilter(e.target.value)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: `1px solid ${tradeGroupFilter ? C.primary.default : C.border.subtle}`,
-              fontSize: "13px",
-              fontFamily: FONT,
-              outline: "none",
-              color: tradeGroupFilter ? C.primary.default : C.gray.subtle,
-              fontWeight: tradeGroupFilter ? 700 : 400,
-              background: tradeGroupFilter ? C.surface.primarySubtle : C.gray.negative,
-              cursor: "pointer",
-              minWidth: "160px",
-            }}
-          >
-            <option value="">All Trade Groups</option>
-            {getAllTradeGroups().map((tg) => (
-              <option key={tg} value={tg}>{tg}</option>
-            ))}
-          </select>
+          {/* Trade Group picklist - only for unrestricted users */}
+          {showsAllTrades() && (
+            <>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>
+                Trade Group
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <select
+                  value={tradeGroupFilter}
+                  onChange={(e) => setTradeGroupFilter(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: `1px solid ${tradeGroupFilter ? C.primary.default : C.border.subtle}`,
+                    fontSize: "13px",
+                    fontFamily: FONT,
+                    outline: "none",
+                    color: tradeGroupFilter ? C.primary.default : C.gray.subtle,
+                    fontWeight: tradeGroupFilter ? 700 : 400,
+                    background: tradeGroupFilter ? C.surface.primarySubtle : C.gray.negative,
+                    cursor: "pointer",
+                    minWidth: "160px",
+                  }}
+                >
+                  <option value="">All Trade Groups</option>
+                  {getAllTradeGroups().map((tg) => (
+                    <option key={tg} value={tg}>{tg}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
 
           {/* Clear button */}
           {(isFiltered || tradeGroupFilter) && (
@@ -1160,10 +1223,10 @@ const VehicleConditionDashboard: React.FC = () => {
           )}
 
           {/* Result count hint */}
-          {(isFiltered || tradeGroupFilter) && (
+          {(isFiltered || actualTradeFilter) && (
             <span style={{ fontSize: "12px", color: C.gray.caption }}>
-              {filteredSubmitted.length} submitted · {enrichedNotSubmitted.length} not submitted
-              {tradeGroupFilter ? ` · ${tradeGroupFilter}` : ""}
+              {filteredSubmitted.length} submitted · {filteredNotSubmitted.length} not submitted
+              {actualTradeFilter ? ` · ${actualTradeFilter}` : ""}
             </span>
           )}
         </div>
@@ -1179,7 +1242,7 @@ const VehicleConditionDashboard: React.FC = () => {
 
         <Table
           title="✗ NOT SUBMITTED"
-          data={enrichedNotSubmitted}
+          data={filteredNotSubmitted}
           columns={notSubmittedColumns}
           emptyMessage="All vehicles have submitted reports!"
         />
