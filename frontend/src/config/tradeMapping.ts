@@ -50,6 +50,8 @@ export const TRADE_MAPPING: Record<string, string> = {
   'Carpenter': 'Building Fabric',
   'CARPTERNER': 'Building Fabric',
   'building and fabric': 'Building Fabric',
+  'Project Manager': 'Building Fabric',
+  'project manager': 'Building Fabric',
 
   // Environmental Services
   'Gardening': 'Environmental Services',
@@ -57,10 +59,11 @@ export const TRADE_MAPPING: Record<string, string> = {
   'Rubbish Removal': 'Environmental Services',
   'Pest Proofing': 'Environmental Services',
   'Sanitisation & specialist cleaning': 'Environmental Services',
+  'Environmental Service': 'Environmental Services',
   'Environmental service': 'Environmental Services',
   'environmental service': 'Environmental Services',
   'Environmental Services': 'Environmental Services',
-  'Environmental science': 'Environmental Services',
+  'Environmental Science': 'Environmental Services',
   'environmental science': 'Environmental Services',
 
   // Drainage & Plumbing
@@ -69,7 +72,7 @@ export const TRADE_MAPPING: Record<string, string> = {
   'plumbling': 'Drainage & Plumbing',
   'drainage': 'Drainage & Plumbing',
 
-  // Key Account (Primary trade group)
+  // Key Account
   'Key Account': 'Key Account',
   'Key Accounts': 'Key Account',
   'key account': 'Key Account',
@@ -77,19 +80,10 @@ export const TRADE_MAPPING: Record<string, string> = {
   'key accounts': 'Key Account',
   'key': 'Key Account',
   'Key': 'Key Account',
-
-  // Building Fabric (includes project manager, environmental services)
-  'Project Manager': 'Building Fabric',
-  'project manager': 'Building Fabric',
   'Insurance': 'Key Account',
   'Manager for Insurance': 'Key Account',
   'manager for insurance': 'Key Account',
   'insurance': 'Key Account',
-  'Environmental Service': 'Building Fabric',
-  'Environmental service': 'Building Fabric',
-  'environmental service': 'Building Fabric',
-  'Environmental Science': 'Building Fabric',
-  'environmental science': 'Building Fabric',
 };
 
 /**
@@ -99,17 +93,15 @@ export const TRADE_MAPPING: Record<string, string> = {
  */
 export const getTradeGroup = (trade: string): string => {
   if (!trade || trade === 'N/A' || trade.trim() === '') {
-    return 'Building Fabric'; // Default fallback
+    return 'Building Fabric';
   }
 
   const tradeTrimmed = trade.trim();
-  
-  // Try exact match first (fast path)
+
   if (TRADE_MAPPING[tradeTrimmed]) {
     return TRADE_MAPPING[tradeTrimmed];
   }
 
-  // Try case-insensitive match
   const tradeLower = tradeTrimmed.toLowerCase();
   for (const [key, value] of Object.entries(TRADE_MAPPING)) {
     if (key.toLowerCase() === tradeLower) {
@@ -117,14 +109,12 @@ export const getTradeGroup = (trade: string): string => {
     }
   }
 
-  // Try substring matching (e.g., "ULTILITIES" contains "utilities")
   for (const [key, value] of Object.entries(TRADE_MAPPING)) {
     if (tradeLower.includes(key.toLowerCase()) || key.toLowerCase().includes(tradeLower)) {
       return value;
     }
   }
 
-  // Fallback: return 'Building Fabric' for anything not in mapping
   return 'Building Fabric';
 };
 
