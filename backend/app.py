@@ -30,6 +30,7 @@ from routes.auth import router as auth_router
 from routes.uploadvehicle import router as upload_router
 from routes.cost import router as cost_router
 from routes.vehicle_condition import router as vehicle_condition_router
+from routes.register_asset import router as register_asset_router  # ← NEW
 
 GLOBAL_DRIVER_CACHE = []
 
@@ -69,6 +70,7 @@ app.include_router(upload_router)
 app.include_router(auth_router)
 app.include_router(vehicle_condition_router)
 app.include_router(cost_router)
+app.include_router(register_asset_router)  # ← NEW
 
 
 async def _background_cache_load():
