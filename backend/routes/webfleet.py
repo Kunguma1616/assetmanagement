@@ -304,7 +304,7 @@ def get_engineers_with_scores():
                 
                 # Debug: show first 5 vehicles
                 if idx < 5:
-                    print(f"   Vehicle {vehicle_id[:10]}... → Van: '{van_number}' | Name: '{vehicle_name}' → Using: '{display_name}'")
+                    print(f"   Vehicle {vehicle_id[:10]}... -> Van: '{van_number}' | Name: '{vehicle_name}' -> Using: '{display_name}'")
             
             print(f"[OK] Built vehicle van_number map: {len(vehicle_to_van)} vehicles")
         except Exception as e:
@@ -343,7 +343,7 @@ def get_engineers_with_scores():
                 if service_resource_id and service_resource_id not in service_resource_to_van:
                     service_resource_to_van[service_resource_id] = van_number
                     if len(service_resource_to_van) <= 5:
-                        print(f"   Allocation: {service_resource_id[:10]}... → Vehicle {vehicle_id[:10]}... → Van: '{van_number}'")
+                        print(f"   Allocation: {service_resource_id[:10]}... -> Vehicle {vehicle_id[:10]}... -> Van: '{van_number}'")
             
             print(f"[OK] Mapped {len(service_resource_to_van)} service resources to van numbers\n")
             
@@ -410,7 +410,7 @@ def get_engineers_with_scores():
         # Debug: show top 5 engineers being returned
         print(f"\n[*] TOP 5 ENGINEERS BEING SENT TO FRONTEND:")
         for eng in engineers_list[:5]:
-            print(f"   {eng['rank']}. {eng['name']} → Van: '{eng['van_number']}' | Score: {eng['driving_score']}")
+            print(f"   {eng['rank']}. {eng['name']} -> Van: '{eng['van_number']}'   | Score: {eng['driving_score']}")
         
         print(f"\n{'='*80}")
         print(f"[OK] COMPLETE!")
