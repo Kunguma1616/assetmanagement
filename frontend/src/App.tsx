@@ -9,8 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import FleetDashboard from "./pages/FleetDashboard";
 import Webfleet from "./pages/webfleet";
 import Upload from "./pages/Upload";
+import RegisterAsset from "./pages/RegisterAsset";
 import VehicleLookup from "./pages/VehicleLookup";
-import UploadAsset from "./pages/UploadAsset";
 import AssetsGallery from "./pages/AssetsGallery";
 import AssetDetail from "./pages/AssetDetail";
 import NotFound from "./pages/NotFound";
@@ -39,11 +39,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const session = params.get("session");
     const user = params.get("user");
     const userEmail = params.get("email");
+    const trade = params.get("trade"); // ✅ Get trade parameter
 
     if (session && user && userEmail) {
       console.log("✅ OAuth callback detected, saving session...");
       sessionStorage.setItem("user_session", session);
-      sessionStorage.setItem("user_data", JSON.stringify({ name: user, email: userEmail }));
+      sessionStorage.setItem("user_data", JSON.stringify({ name: user, email: userEmail, session, trade: trade || "ALL" })); // ✅ Include trade
       window.history.replaceState({}, document.title, window.location.pathname);
       setIsAuthenticated(true);
       setLoading(false);
@@ -150,7 +151,7 @@ const App = () => (
             path="/upload-asset"
             element={
               <ProtectedRoute>
-                <UploadAsset />
+                <RegisterAsset />
               </ProtectedRoute>
             }
           />
