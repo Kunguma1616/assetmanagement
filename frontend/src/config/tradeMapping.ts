@@ -134,6 +134,8 @@ export const TRADE_MAPPING: Record<string, string> = {
   'Carpenter': 'Building Fabric',
   'CARPTERNER': 'Building Fabric',
   'building and fabric': 'Building Fabric',
+  'Project Manager': 'Building Fabric',
+  'project manager': 'Building Fabric',
 
   // Environmental Services
   'Gardening': 'Environmental Services',
@@ -141,10 +143,11 @@ export const TRADE_MAPPING: Record<string, string> = {
   'Rubbish Removal': 'Environmental Services',
   'Pest Proofing': 'Environmental Services',
   'Sanitisation & specialist cleaning': 'Environmental Services',
+  'Environmental Service': 'Environmental Services',
   'Environmental service': 'Environmental Services',
   'environmental service': 'Environmental Services',
   'Environmental Services': 'Environmental Services',
-  'Environmental science': 'Environmental Services',
+  'Environmental Science': 'Environmental Services',
   'environmental science': 'Environmental Services',
 
   // Drainage & Plumbing
@@ -161,19 +164,10 @@ export const TRADE_MAPPING: Record<string, string> = {
   'key accounts': 'Key Account',
   'key': 'Key Account',
   'Key': 'Key Account',
-
-  // Building Fabric (includes project manager, environmental services)
-  'Project Manager': 'Building Fabric',
-  'project manager': 'Building Fabric',
   'Insurance': 'Key Account',
   'Manager for Insurance': 'Key Account',
   'manager for insurance': 'Key Account',
   'insurance': 'Key Account',
-  'Environmental Service': 'Building Fabric',
-  'Environmental service': 'Building Fabric',
-  'environmental service': 'Building Fabric',
-  'Environmental Science': 'Building Fabric',
-  'environmental science': 'Building Fabric',
 };
 
 /**
@@ -213,7 +207,8 @@ export const getTradeGroup = (trade: string): string => {
 };
 
 /**
-   * Get all unique parent trade groups (7 groups from picklist)
-   */
-  export const getAllTradeGroups = (): string[] => {
-    return TRADE_GROUP_PICKLIST;  };
+ * Get all unique parent trade groups (7 groups from picklist)
+ */
+export const getAllTradeGroups = (): string[] => {
+  return TRADE_GROUP_PICKLIST;
+};

@@ -5,8 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import sys
 import os
+import asyncio
 
-# Try to import Groq for AI features (optional)
 try:
     from groq import Groq
     GROQ_AVAILABLE = True
@@ -14,7 +14,6 @@ except ImportError:
     GROQ_AVAILABLE = False
     print("[WARNING] Groq library not installed. Install with: pip install groq")
 
-# Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from routes.dashboard import router as dashboard_router
@@ -31,22 +30,21 @@ from routes.auth import router as auth_router
 from routes.uploadvehicle import router as upload_router
 from routes.cost import router as cost_router
 from routes.vehicle_condition import router as vehicle_condition_router
+<<<<<<< HEAD
 from routes.register_asset import router as register_asset_router
 from routes.leases import router as leases_router
+=======
+from routes.register_asset import router as register_asset_router  # ← NEW
+>>>>>>> ef037d9265ecea72b30b979e6991e743d3c15751
 
-# ─────────────────────────────────────────────────────────
-# GLOBAL DRIVER CACHE
-# ─────────────────────────────────────────────────────────
 GLOBAL_DRIVER_CACHE = []
 
-# Initialize FastAPI app
 app = FastAPI(
     title="Fleet & Asset Management System API",
     description="Backend API for Fleet & Asset Management System",
     version="1.0.0"
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -63,9 +61,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+<<<<<<< HEAD
 # ─────────────────────────────────────────────────────────
 # ROUTERS
 # ─────────────────────────────────────────────────────────
+=======
+>>>>>>> ef037d9265ecea72b30b979e6991e743d3c15751
 app.include_router(asset_dashboard_router)
 app.include_router(dashboard_router)
 app.include_router(allocation_router)
@@ -80,50 +81,78 @@ app.include_router(upload_router)
 app.include_router(auth_router)
 app.include_router(vehicle_condition_router)
 app.include_router(cost_router)
+<<<<<<< HEAD
 app.include_router(register_asset_router)
 app.include_router(leases_router)
+=======
+app.include_router(register_asset_router)  # ← NEW
+>>>>>>> ef037d9265ecea72b30b979e6991e743d3c15751
 
-# ─────────────────────────────────────────────────────────
-# STARTUP EVENT
-# ─────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def load_driver_cache():
-    """Preload all engineers with Webfleet scores at startup."""
+
+async def _background_cache_load():
     global GLOBAL_DRIVER_CACHE
-    try:
-        print("\n" + "="*80)
-        print("[STARTUP] Initializing driver cache...")
-        print("="*80)
+    loop = asyncio.get_event_loop()
 
-        start_scheduler()
-        result = load_engineers_with_scores()
+    def _load():
+        try:
+            print("\n" + "="*80)
+            print("[STARTUP] Initializing driver cache...")
+            print("="*80)
+            start_scheduler()
+            return load_engineers_with_scores()
+        except Exception as e:
+            print(f"[WARNING] Cache load failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    try:
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, _load),
+            timeout=60
+        )
 
         if result and result.get("engineers"):
             GLOBAL_DRIVER_CACHE = result["engineers"]
-            total       = len(GLOBAL_DRIVER_CACHE)
+            total = len(GLOBAL_DRIVER_CACHE)
             with_scores = result.get("with_scores", 0)
             print(f"[OK] Cache loaded: {total} engineers ({with_scores} with scores)\n")
 
-            from routes.chat import initialize_groq_service
-            initialize_groq_service(driver_cache=GLOBAL_DRIVER_CACHE)
+            try:
+                from routes.chat import initialize_groq_service
+                initialize_groq_service(driver_cache=GLOBAL_DRIVER_CACHE)
+            except Exception as e:
+                print(f"[WARNING] Groq service init failed: {e}")
         else:
             print("[WARNING] Cache load returned no data\n")
             GLOBAL_DRIVER_CACHE = []
+
+    except asyncio.TimeoutError:
+        print("[WARNING] Cache load timed out after 60s — app running without cache\n")
+        GLOBAL_DRIVER_CACHE = []
     except Exception as e:
-        print(f"[WARNING] Failed to preload driver cache: {e}\n")
-        import traceback
-        traceback.print_exc()
+        print(f"[WARNING] Unexpected error during cache load: {e}\n")
         GLOBAL_DRIVER_CACHE = []
 
 
+<<<<<<< HEAD
 # ─────────────────────────────────────────────────────────
 # HEALTH CHECK
 # ─────────────────────────────────────────────────────────
+=======
+@app.on_event("startup")
+async def startup_event():
+    print("[STARTUP] App is up. Scheduling background cache load...")
+    asyncio.create_task(_background_cache_load())
+
+
+>>>>>>> ef037d9265ecea72b30b979e6991e743d3c15751
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
 
 
+<<<<<<< HEAD
 # ─────────────────────────────────────────────────────────
 # SERVE FRONTEND STATIC FILES
 # ─────────────────────────────────────────────────────────
@@ -142,10 +171,26 @@ else:
         app.mount("/assets", StaticFiles(directory="./static/assets"), name="assets")
     except Exception as e:
         print(f"⚠️ Warning: Could not mount static assets: {e}")
+=======
+# ─── SERVE FRONTEND ───────────────────────────────────────
+static_dir = "/app/static"
+
+assets_path = f"{static_dir}/assets"
+if os.path.isdir(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+else:
+    print(f"[WARNING] Assets directory not found: {assets_path}")
+
+
+@app.get("/")
+async def serve_root():
+    return FileResponse(f"{static_dir}/index.html")
+>>>>>>> ef037d9265ecea72b30b979e6991e743d3c15751
 
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
+<<<<<<< HEAD
     # First check if it's an actual file in the static dir (logo, fonts, etc.)
     file_path = os.path.join(static_dir, full_path)
     if full_path and os.path.isfile(file_path):
@@ -156,10 +201,20 @@ async def serve_frontend(full_path: str):
         return FileResponse(index_path)
     # Dev mode: static files not built yet — return 404 instead of crashing
     raise HTTPException(status_code=404, detail="Frontend not built yet. Run 'npm run build'.")
+=======
+    file_path = os.path.join(static_dir, full_path)
+    if full_path and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    return FileResponse(f"{static_dir}/index.html")
+>>>>>>> ef037d9265ecea72b30b979e6991e743d3c15751
 
 
 if __name__ == "__main__":
     import uvicorn
+<<<<<<< HEAD
     port = 8080
+=======
+    port = int(os.environ.get("PORT", 8080))
+>>>>>>> ef037d9265ecea72b30b979e6991e743d3c15751
     print(f"[LAUNCH] Starting server on port {port}...")
     uvicorn.run(app, host="0.0.0.0", port=port)

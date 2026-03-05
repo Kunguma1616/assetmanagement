@@ -1155,4 +1155,8 @@ def get_vehicle_financial_overview(trade_group: str = None):
         print(f"❌ Error generating financial overview: {e}")
         import traceback
         traceback.print_exc()
+<<<<<<< HEAD
         raise HTTPException(status_code=500, detail=f"Error generating overview: {str(e)}")
+=======
+        raise HTTPException(status_code=500, detail=f"Error generating overview: {str(e)}")
+>>>>>>> ef037d9265ecea72b30b979e6991e743d3c15751
