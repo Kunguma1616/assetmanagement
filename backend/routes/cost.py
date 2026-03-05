@@ -7,8 +7,23 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from salesforce_service import SalesforceService
-from lease_data_helper import get_lease_data_with_trade_groups
+
+try:
+    from lease_data_helper import get_lease_data_with_trade_groups
+except Exception as e:
+    print(f"[WARNING] lease_data_helper not available: {e}")
+    def get_lease_data_with_trade_groups(*a, **k):
+        return pd.DataFrame()
+
+try:
+    from operational_insights import get_operational_insights, get_top_10_expensive_vans, get_cost_summary
+except Exception as e:
+    print(f"[WARNING] operational_insights not available: {e}")
+    def get_operational_insights(*a, **k): return []
+    def get_top_10_expensive_vans(*a, **k): return []
+    def get_cost_summary(*a, **k): return {}
 
 router = APIRouter(prefix="/api/cost", tags=["cost"])
 
@@ -24,18 +39,15 @@ def load_lease_data():
         wb = openpyxl.load_workbook(EXCEL_FILE, data_only=True)
         ws = wb.active
         
-        # Headers are in row 2
         headers = [ws.cell(2, i).value for i in range(1, ws.max_column + 1) if ws.cell(2, i).value]
         
         leases = []
-        # Data starts from row 3
         for row_idx in range(3, ws.max_row + 1):
             row_data = {}
             for col_idx, header in enumerate(headers, 1):
                 cell_value = ws.cell(row_idx, col_idx).value
                 row_data[header] = cell_value
             
-            # Only add if it has an identifier
             if row_data.get('Identifier ') or row_data.get('Registration Doc '):
                 leases.append(row_data)
         
@@ -629,9 +641,11 @@ def get_all_csv_leases():
             return {"success": False, "total": 0, "rows": [],
                     "error": f"Excel file not found. Searched: {[str(p) for p in EXCEL_PATHS]}"}
 
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from excel_handler import read_and_clean_hsbc_leases
-        df = read_and_clean_hsbc_leases(excel_file, verbose=False)
+        try:
+            from excel_handler import read_and_clean_hsbc_leases
+            df = read_and_clean_hsbc_leases(excel_file, verbose=False)
+        except ImportError:
+            return {"success": False, "total": 0, "rows": [], "error": "excel_handler not available"}
 
         if 'Identifier' in df.columns:
             df['Identifier'] = df['Identifier'].ffill()
@@ -667,10 +681,6 @@ def get_all_csv_leases():
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ─── Fleet Operational Insights ───────────────────────────────────────────────
-from operational_insights import get_operational_insights, get_top_10_expensive_vans, get_cost_summary
 
 
 @router.get("/operational-insights")
@@ -751,7 +761,7 @@ def get_vehicle_financial_overview(trade_group: str = None):
         lease_df = get_lease_data_with_trade_groups(as_dict=False)
         lease_dict = {}
         
-        if lease_df is not None and len(lease_df) > 0:
+        if lease_df is not None and isinstance(lease_df, pd.DataFrame) and len(lease_df) > 0:
             for _, row in lease_df.iterrows():
                 reg_key = str(row.get('Registration Doc', '')).strip().upper() if pd.notna(row.get('Registration Doc')) else None
                 if reg_key:
