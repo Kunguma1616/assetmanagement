@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   Trophy, TrendingUp, AlertCircle, CheckCircle2,
-  Users, Award, RefreshCw, Star, Medal, Target, Zap,
+  Users, Award, RefreshCw, Star, Medal, Target, Zap, Lock,
 } from 'lucide-react';
 import { API_ENDPOINTS } from '@/config/api';
+import { getTradeGroup, getAllTradeGroups } from '@/config/tradeMapping';
+import { useUserTrade } from '@/hooks/useUserTrade';
 
 // ── Brand palette (exact colors.ts) ──────────────────────────────────────────
 const C = {
@@ -197,8 +199,18 @@ const Webfleet: React.FC = () => {
   const [stats,     setStats]     = useState<Statistics | null>(null);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
+  const [selectedTradeGroup, setSelectedTradeGroup] = useState<string | null>(null);
+  const { userTrade, userName, showsAllTrades, canViewTrade } = useUserTrade();
 
-  useEffect(() => { fetchEngineers(); }, []);
+  useEffect(() => { 
+    // Auto-select user's trade group if they have a restriction
+    console.log(`[webfleet] useEffect triggered. userTrade: ${userTrade}`);
+    if (userTrade && userTrade !== 'ALL') {
+      console.log(`[webfleet] Setting selectedTradeGroup to: ${userTrade}`);
+      setSelectedTradeGroup(userTrade);
+    }
+    fetchEngineers();
+  }, [userTrade]);
 
   const isValidName = (name: string): boolean => {
     if (!name || name.length < 2) return false;
@@ -213,24 +225,48 @@ const Webfleet: React.FC = () => {
 
   const fetchEngineers = async () => {
     try {
+      console.log(`[webfleet] fetchEngineers starting. showsAllTrades: ${showsAllTrades()}, userTrade: ${userTrade}`);
       setLoading(true); setError(null);
-      const response = await axios.get(API_ENDPOINTS.DRIVERS_EXCEL);
-      const clean = response.data.drivers
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
+      const response = await axios.get(API_ENDPOINTS.DRIVERS_EXCEL, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      console.log(`[webfleet] API returned ${response.data.drivers?.length || 0} drivers`);
+      
+      let clean = response.data.drivers
         .filter((d: any) => isValidName(d.name))
         .map((d: any) => ({
           rank:        d.rank,
           name:        d.name,
           email:       d.email       || 'N/A',
           van_number:  d.van_number  || 'N/A',
-          trade_group: d.trade_group || 'N/A',
+          trade_group: getTradeGroup(d.trade_group || 'N/A'),
           score:       d.score       || 0,
           score_class: d.score_class || 'poor',
         }));
+      
+      // ✅ Apply trade-based access restriction
+      if (!showsAllTrades()) {
+        console.log(`🔒 [webfleet] Filtering data for trade: ${userTrade}`);
+        const beforeFilter = clean.length;
+        clean = clean.filter(engineer => canViewTrade(engineer.trade_group));
+        console.log(`🔒 [webfleet] Filtered ${beforeFilter} engineers to ${clean.length} for trade ${userTrade}`);
+      }
+      
+      console.log(`[webfleet] Setting ${clean.length} engineers`);
       setEngineers(clean);
       setStats(response.data.statistics);
-    } catch (err) {
-      console.error('Failed to fetch drivers:', err);
-      setError('Failed to load driver data. Please try again.');
+    } catch (err: any) {
+      const errorMsg = err.name === 'AbortError' 
+        ? 'Request timeout - API took too long to respond' 
+        : 'Failed to fetch driver data. Please try again.';
+      console.error(`[webfleet] Error:`, err.message);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -267,7 +303,36 @@ const Webfleet: React.FC = () => {
   // ── Avatar initials ───────────────────────────────────────────────────────
   const initials = (name: string) =>
     name.split(' ').map(n => n[0] ?? '').join('').slice(0, 2).toUpperCase();
+  // ── Get unique trade groups ────────────────────────────────────────────
+  const tradeGroups = getAllTradeGroups();
 
+  // ── Filter engineers based on selected trade group ──────────────────────
+  const filteredEngineers = selectedTradeGroup
+    ? engineers.filter(e => e.trade_group === selectedTradeGroup)
+    : engineers;
+
+  // ── Calculate filtered stats based on selected trade group ──────────────
+  const calculateFilteredStats = (engineersList: Engineer[]): Statistics => {
+    const withScores = engineersList.filter(e => e.score > 0);
+    const scores = withScores.map(e => e.score);
+    
+    return {
+      total_drivers: engineersList.length,
+      drivers_with_scores: withScores.length,
+      average_score: scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0,
+      highest_score: scores.length > 0 ? Math.max(...scores) : 0,
+      excellent: engineersList.filter(e => e.score >= 9.0).length,
+      good: engineersList.filter(e => e.score >= 8.0 && e.score < 9.0).length,
+      fair: engineersList.filter(e => e.score >= 6.0 && e.score < 8.0).length,
+      needs_improvement: engineersList.filter(e => e.score >= 4.0 && e.score < 6.0).length,
+      poor: engineersList.filter(e => e.score < 4.0).length,
+    };
+  };
+
+  // Use filtered stats if trade group is selected, otherwise use global stats
+  const displayStats = selectedTradeGroup && filteredEngineers.length > 0 
+    ? calculateFilteredStats(filteredEngineers)
+    : stats;
   return (
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: FONT }}>
 
@@ -326,9 +391,24 @@ const Webfleet: React.FC = () => {
               <h1 style={{ fontSize: 30, fontWeight: 900, color: C.white, margin: '0 0 5px', letterSpacing: '-0.03em', fontFamily: FONT }}>
                 Engineer Rankings
               </h1>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.58)', margin: 0, fontWeight: 500, fontFamily: FONT }}>
-                {stats ? `${stats.total_drivers} engineers · Webfleet driving scores` : 'Webfleet driving scores'}
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.58)', margin: 0, fontWeight: 500, fontFamily: FONT }}>
+                  {displayStats ? `${displayStats.total_drivers} engineers · Webfleet driving scores` : 'Webfleet driving scores'}
+                </p>
+                {!showsAllTrades() && (
+                  <div title={`Viewing data for ${userTrade} trade only`} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '4px 12px', borderRadius: 8,
+                    background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)',
+                    backdropFilter: 'blur(10px)',
+                  }}>
+                    <Lock style={{ width: 13, height: 13, color: 'rgba(255,255,255,0.8)' }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.9)', fontFamily: FONT }}>
+                      {userTrade} Only
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -354,22 +434,22 @@ const Webfleet: React.FC = () => {
             marginTop: -72 pulls them up into the header zone.
             background: C.white ensures they're NEVER see-through.
         ──────────────────────────────────────────────────────────────────── */}
-        {stats && (
+        {displayStats && (
           <div style={{ marginTop: -72, position: 'relative', zIndex: 20, marginBottom: 28 }}>
 
             {/* Row 1 — 5 equal columns */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 14 }}>
               <KpiCard
                 label="Total Engineers"
-                value={stats.total_drivers}
-                sub={`${stats.drivers_with_scores} with scores`}
+                value={displayStats.total_drivers}
+                sub={`${displayStats.drivers_with_scores} with scores`}
                 icon={Users}
                 accentColor={C.blue}
                 iconBg={C.blueSubtle}
               />
               <KpiCard
                 label="Average Score"
-                value={stats.average_score.toFixed(1)}
+                value={displayStats.average_score.toFixed(1)}
                 sub="out of 10"
                 icon={TrendingUp}
                 accentColor={C.blueLight}
@@ -377,7 +457,7 @@ const Webfleet: React.FC = () => {
               />
               <KpiCard
                 label="Top Score"
-                value={stats.highest_score}
+                value={displayStats.highest_score}
                 sub="⭐ Best result"
                 icon={Trophy}
                 accentColor={C.yellowDark}
@@ -385,7 +465,7 @@ const Webfleet: React.FC = () => {
               />
               <KpiCard
                 label="Excellent"
-                value={stats.excellent}
+                value={displayStats.excellent}
                 sub="Score 9.0+"
                 icon={Star}
                 accentColor={C.green}
@@ -393,7 +473,7 @@ const Webfleet: React.FC = () => {
               />
               <KpiCard
                 label="Good"
-                value={stats.good}
+                value={displayStats.good}
                 sub="Score 8.0–8.9"
                 icon={CheckCircle2}
                 accentColor={C.blueLight}
@@ -424,7 +504,7 @@ const Webfleet: React.FC = () => {
                   </p>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontSize: 38, fontWeight: 900, color: C.title, lineHeight: 1, fontFamily: FONT }}>
-                      {stats.needs_improvement + stats.poor}
+                      {displayStats.needs_improvement + displayStats.poor}
                     </span>
                     <span style={{ fontSize: 13, color: C.gray, fontWeight: 600, fontFamily: FONT }}>engineers below 7.0</span>
                   </div>
@@ -434,9 +514,8 @@ const Webfleet: React.FC = () => {
               {/* Right — breakdown pills */}
               <div style={{ display: 'flex', gap: 10 }}>
                 {[
-                  { label: 'Fair',              val: stats.fair,              color: C.orange, bg: C.orangeSubtle, border: C.orangeBorder },
-                  { label: 'Needs Improvement', val: stats.needs_improvement, color: C.orange, bg: C.orangeSubtle, border: C.orangeBorder },
-                  { label: 'Poor',              val: stats.poor,              color: C.red,    bg: C.redSubtle,    border: C.redBorder    },
+                  { label: 'Needs Improvement', val: displayStats.needs_improvement, color: C.orange, bg: C.orangeSubtle, border: C.orangeBorder },
+                  { label: 'Poor',              val: displayStats.poor,              color: C.red,    bg: C.redSubtle,    border: C.redBorder    },
                 ].map(item => (
                   <div key={item.label} style={{
                     textAlign: 'center', background: item.bg,
@@ -464,13 +543,13 @@ const Webfleet: React.FC = () => {
           border: `1px solid ${C.borderSubtle}`,
           overflow: 'hidden',
         }}>
-          {/* Table title bar */}
+          {/* Table title bar with filter */}
           <div style={{
             padding: '22px 32px',
             borderBottom: `1px solid ${C.borderSubtle}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20,
           }}>
-            <div>
+            <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: 19, fontWeight: 900, color: C.title, margin: '0 0 3px', fontFamily: FONT }}>
                 Engineer Performance Ranking
               </h2>
@@ -478,12 +557,57 @@ const Webfleet: React.FC = () => {
                 Sorted by driving score — top performers first
               </p>
             </div>
+
+            {/* Trade Group Filter - only for unrestricted users */}
+            {showsAllTrades() && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.body, fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                  Trade Group:
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+                  <select
+                    value={selectedTradeGroup || ''}
+                    onChange={(e) => setSelectedTradeGroup(e.target.value || null)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 10,
+                      border: `1.5px solid ${C.blueBorder}`,
+                      background: C.blueSubtle,
+                      color: C.title,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      fontFamily: FONT,
+                      cursor: 'pointer',
+                      flex: 1,
+                      outline: 'none',
+                      transition: 'all 0.2s',
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = C.blue;
+                      e.currentTarget.style.boxShadow = `0 0 0 3px ${C.blueSubtle}`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.borderColor = C.blueBorder;
+                    }}
+                  >
+                    <option value="">All Trade Groups</option>
+                    {tradeGroups.map(tg => (
+                      <option key={tg} value={tg}>
+                        {tg}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
             <div style={{
               background: C.blueSubtle, border: `1px solid ${C.blueBorder}`,
               borderRadius: 20, padding: '6px 16px',
-              fontSize: 12, fontWeight: 700, color: C.blue, fontFamily: FONT,
+              fontSize: 12, fontWeight: 700, color: C.blue, fontFamily: FONT, whiteSpace: 'nowrap',
             }}>
-              {engineers.length} engineers
+              {filteredEngineers.length} engineers
             </div>
           </div>
 
@@ -515,13 +639,13 @@ const Webfleet: React.FC = () => {
               </thead>
 
               <tbody>
-                {engineers.length === 0 ? (
+                {filteredEngineers.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ padding: '60px 20px', textAlign: 'center', color: C.gray, fontSize: 14, fontFamily: FONT }}>
                       No engineers found
                     </td>
                   </tr>
-                ) : engineers.map((eng) => {
+                ) : filteredEngineers.map((eng) => {
                   const scoreCfg = cfg(eng.score_class);
                   const isTop3   = eng.rank <= 3;
                   return (
@@ -619,21 +743,20 @@ const Webfleet: React.FC = () => {
           </div>
 
           {/* Table footer */}
-          {engineers.length > 0 && (
+          {filteredEngineers.length > 0 && (
             <div style={{
               padding: '14px 28px',
               borderTop: `1px solid ${C.borderSubtle}`,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <p style={{ fontSize: 11, color: C.gray, margin: 0, fontFamily: FONT, fontWeight: 600 }}>
-                Showing <b style={{ color: C.body }}>{engineers.length}</b> engineers · Sorted by score descending
+                Showing <b style={{ color: C.body }}>{filteredEngineers.length}</b> engineers {selectedTradeGroup && `· ${selectedTradeGroup}`} · Sorted by score descending
               </p>
               {/* Legend */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {[
                   { label: 'Excellent', color: C.yellowDark },
                   { label: 'Good',      color: C.green      },
-                  { label: 'Fair',      color: C.orange     },
                   { label: 'Poor',      color: C.red        },
                 ].map(l => (
                   <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>

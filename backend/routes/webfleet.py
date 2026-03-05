@@ -32,17 +32,17 @@ def refresh_webfleet_cache():
     """
     global _cache
     try:
-        print("\n🔄 [CACHE REFRESH] Starting cache refresh...")
+        print("\n[*] [CACHE REFRESH] Starting cache refresh...")
         scores = get_all_webfleet_scores_BATCH()
         
         with _cache_lock:
             _cache['scores'] = scores
             _cache['last_updated'] = datetime.now()
         
-        print(f"✅ [CACHE REFRESH] Complete - {len(scores)} drivers cached")
+        print(f"[OK] [CACHE REFRESH] Complete - {len(scores)} drivers cached")
         return True
     except Exception as e:
-        print(f"⚠️  [CACHE REFRESH] Failed: {e}")
+        print(f"[WARN] [CACHE REFRESH] Failed: {e}")
         return False
 
 
@@ -83,14 +83,14 @@ def start_scheduler():
 
 def get_all_webfleet_scores_BATCH():
     """
-    ⚡ TRUE BATCH MODE - Fetches ALL scores from Webfleet in ONE operation
+    [*] TRUE BATCH MODE - Fetches ALL scores from Webfleet in ONE operation
     This does NOT call the API for each driver individually!
     """
     try:
         webfleet = WebfleetAPI()
         
         print("\n" + "="*80)
-        print("⚡ BATCH MODE: Fetching ALL OptiDrive data at once")
+        print("[*] BATCH MODE: Fetching ALL OptiDrive data at once")
         print("="*80)
         
         # Get date range (7 days)
@@ -112,7 +112,7 @@ def get_all_webfleet_scores_BATCH():
             'useISO8601': 'true'
         }
         
-        print(f"📡 Calling showOptiDriveIndicator (batch)...")
+        print(f"[*] Calling showOptiDriveIndicator (batch)...")
         print(f"   Date range: {range_from} to {range_to}")
         
         optidrive_response = requests.get(
@@ -123,19 +123,19 @@ def get_all_webfleet_scores_BATCH():
         )
         
         if optidrive_response.status_code != 200:
-            print(f"❌ OptiDrive API error: {optidrive_response.status_code}")
+            print(f"[ERROR] OptiDrive API error: {optidrive_response.status_code}")
             return {}
         
         optidrive_data = optidrive_response.json()
         
         if not isinstance(optidrive_data, list):
-            print(f"⚠️ Unexpected response format: {type(optidrive_data)}")
+            print(f"[WARN] Unexpected response format: {type(optidrive_data)}")
             return {}
         
-        print(f"✅ Got {len(optidrive_data)} driver scores from Webfleet")
+        print(f"[OK] Got {len(optidrive_data)} driver scores from Webfleet")
         
         # ⚡ Now get driver emails to map names to emails
-        print(f"📡 Fetching driver emails...")
+        print(f"[*] Fetching driver emails...")
         
         driver_params = {
             'account': webfleet.account,
@@ -155,16 +155,16 @@ def get_all_webfleet_scores_BATCH():
         )
         
         if driver_response.status_code != 200:
-            print(f"❌ Driver API error: {driver_response.status_code}")
+            print(f"[ERROR] Driver API error: {driver_response.status_code}")
             return {}
         
         driver_data = driver_response.json()
         
         if not isinstance(driver_data, list):
-            print(f"⚠️ Unexpected driver data format")
+            print(f"[WARN] Unexpected driver data format")
             return {}
         
-        print(f"✅ Got {len(driver_data)} driver records")
+        print(f"[OK] Got {len(driver_data)} driver records")
         
         # Build name to email mapping
         name_to_email = {}
@@ -175,7 +175,7 @@ def get_all_webfleet_scores_BATCH():
                 if name and email:
                     name_to_email[name] = email
         
-        print(f"✅ Mapped {len(name_to_email)} driver names to emails")
+        print(f"[OK] Mapped {len(name_to_email)} driver names to emails")
         
         # Build email to score mapping
         email_to_score = {}
@@ -204,18 +204,18 @@ def get_all_webfleet_scores_BATCH():
                     matched += 1
                     
                     if matched <= 10:
-                        print(f"   ✅ {driver_name} ({email}): {final_score}")
+                        print(f"   [OK] {driver_name} ({email}): {final_score}")
                     
                 except (ValueError, TypeError):
                     email_to_score[email] = 0
         
-        print(f"\n✅ Successfully mapped {matched} drivers with scores")
+        print(f"\n[OK] Successfully mapped {matched} drivers with scores")
         print("="*80 + "\n")
         
         return email_to_score
         
     except Exception as e:
-        print(f"❌ Error in batch fetch: {e}")
+        print(f"[ERROR] Error in batch fetch: {e}")
         import traceback
         traceback.print_exc()
         return {}
@@ -234,7 +234,7 @@ def get_engineers_with_scores():
         sf = SalesforceService()
         
         print("\n" + "="*80)
-        print("⚡ BATCH LOADING MODE (Using Cache)")
+        print("[*] BATCH LOADING MODE (Using Cache)")
         print("="*80 + "\n")
         
         # ✅ Use cached scores (refreshed automatically every 7 days)
@@ -242,17 +242,17 @@ def get_engineers_with_scores():
         
         # If cache is empty, do initial fetch
         if not email_to_score:
-            print("⚠️ Cache empty - doing initial fetch...")
+            print("[WARN] Cache empty - doing initial fetch...")
             email_to_score = get_all_webfleet_scores_BATCH()
             _cache['scores'] = email_to_score
             _cache['last_updated'] = datetime.now()
         
         scores_with_data = len([s for s in email_to_score.values() if s > 0])
-        print(f"✅ Using {scores_with_data} cached scores")
+        print(f"[OK] Using {scores_with_data} cached scores")
         print(f"   Last updated: {_cache.get('last_updated', 'Unknown')}\n")
         
         # ⚡ STEP 2: Get ALL Salesforce engineers with their vehicle allocations
-        print("🚀 Fetching engineers and their vehicle assignments from Salesforce...")
+        print("[*] Fetching engineers and their vehicle assignments from Salesforce...")
         
         # Get engineers
         engineer_query = """
@@ -270,10 +270,10 @@ def get_engineers_with_scores():
         result = sf.sf.query(engineer_query)
         all_engineers = result.get('records', [])
         
-        print(f"✅ Found {len(all_engineers)} active engineers")
+        print(f"[OK] Found {len(all_engineers)} active engineers")
         
         # Get vehicle allocations for all engineers (including van numbers)
-        print("🚀 Fetching vehicle data and allocations...")
+        print("[*] Fetching vehicle data and allocations...")
         
         # First: Get all vehicle van_numbers
         vehicle_query = """
@@ -285,7 +285,7 @@ def get_engineers_with_scores():
         try:
             vehicle_result = sf.sf.query(vehicle_query)
             all_vehicles = vehicle_result.get('records', [])
-            print(f"✅ Found {len(all_vehicles)} vehicles")
+            print(f"[OK] Found {len(all_vehicles)} vehicles")
             
             # Build Vehicle ID → van_number mapping
             vehicle_to_van = {}
@@ -304,17 +304,17 @@ def get_engineers_with_scores():
                 
                 # Debug: show first 5 vehicles
                 if idx < 5:
-                    print(f"   Vehicle {vehicle_id[:10]}... → Van: '{van_number}' | Name: '{vehicle_name}' → Using: '{display_name}'")
+                    print(f"   Vehicle {vehicle_id[:10]}... -> Van: '{van_number}' | Name: '{vehicle_name}' -> Using: '{display_name}'")
             
-            print(f"✅ Built vehicle van_number map: {len(vehicle_to_van)} vehicles")
+            print(f"[OK] Built vehicle van_number map: {len(vehicle_to_van)} vehicles")
         except Exception as e:
-            print(f"⚠️ Error fetching vehicles: {e}")
+            print(f"[WARN] Error fetching vehicles: {e}")
             import traceback
             traceback.print_exc()
             vehicle_to_van = {}
         
         # Second: Get active allocations by Service_Resource ID
-        print("🚀 Fetching active allocations...")
+        print("[*] Fetching active allocations...")
         allocation_query = """
             SELECT 
                 Service_Resource__c,
@@ -330,7 +330,7 @@ def get_engineers_with_scores():
         try:
             allocation_result = sf.sf.query(allocation_query)
             all_allocations = allocation_result.get('records', [])
-            print(f"✅ Found {len(all_allocations)} active allocations")
+            print(f"[OK] Found {len(all_allocations)} active allocations")
             
             # Build Service_Resource ID -> van_number mapping
             service_resource_to_van = {}
@@ -343,18 +343,18 @@ def get_engineers_with_scores():
                 if service_resource_id and service_resource_id not in service_resource_to_van:
                     service_resource_to_van[service_resource_id] = van_number
                     if len(service_resource_to_van) <= 5:
-                        print(f"   Allocation: {service_resource_id[:10]}... → Vehicle {vehicle_id[:10]}... → Van: '{van_number}'")
+                        print(f"   Allocation: {service_resource_id[:10]}... -> Vehicle {vehicle_id[:10]}... -> Van: '{van_number}'")
             
-            print(f"✅ Mapped {len(service_resource_to_van)} service resources to van numbers\n")
+            print(f"[OK] Mapped {len(service_resource_to_van)} service resources to van numbers\n")
             
         except Exception as e:
-            print(f"⚠️ Error fetching allocations: {e}")
+            print(f"[WARN] Error fetching allocations: {e}")
             import traceback
             traceback.print_exc()
             service_resource_to_van = {}
         
         # ⚡ STEP 3: Match in memory (NO API calls!)
-        print("🚀 Matching engineers with scores...")
+        print("[*] Matching engineers with scores...")
         
         engineers_list = []
         matched = 0
@@ -408,22 +408,22 @@ def get_engineers_with_scores():
             engineer['rank'] = idx + 1
         
         # Debug: show top 5 engineers being returned
-        print(f"\n📤 TOP 5 ENGINEERS BEING SENT TO FRONTEND:")
+        print(f"\n[*] TOP 5 ENGINEERS BEING SENT TO FRONTEND:")
         for eng in engineers_list[:5]:
-            print(f"   {eng['rank']}. {eng['name']} → Van: '{eng['van_number']}' | Score: {eng['driving_score']}")
+            print(f"   {eng['rank']}. {eng['name']} -> Van: '{eng['van_number']}'   | Score: {eng['driving_score']}")
         
         print(f"\n{'='*80}")
-        print(f"✅ COMPLETE!")
+        print(f"[OK] COMPLETE!")
         print(f"   Total engineers: {len(engineers_list)}")
-        print(f"   ✅ With scores: {matched}")
-        print(f"   ⚠️ Without scores: {not_matched}")
+        print(f"   [OK] With scores: {matched}")
+        print(f"   [WARN] Without scores: {not_matched}")
         
         if matched > 0:
             avg_score = sum(e['driving_score'] for e in engineers_list if e['driving_score'] > 0) / matched
-            print(f"   📊 Average score: {avg_score:.2f}")
+            print(f"   [STATS] Average score: {avg_score:.2f}")
             
             # Show top 5
-            print(f"\n   🏆 Top 5:")
+            print(f"\n   [TOP] Top 5:")
             for eng in engineers_list[:5]:
                 if eng['driving_score'] > 0:
                     print(f"      {eng['rank']}. {eng['name']}: {eng['driving_score']}")
@@ -441,7 +441,7 @@ def get_engineers_with_scores():
         }
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[ERROR] Error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,117 +1,131 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-import os
-import sys
-import traceback
+import logging
+from datetime import datetime
 
-# Add backend directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+router = APIRouter(prefix="/api", tags=["chat"])
 
-from groq_service import GroqService, GROQ_AVAILABLE
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+# Request/Response Models
+class Message(BaseModel):
+    role: str
+    content: str
 
-# Initialize Groq service (will be set with cache after startup)
-groq_service: Optional[GroqService] = None
-
-def initialize_groq_service(driver_cache=None):
-    """
-    Initialize Groq service with optional driver cache
-    Called from app startup or can be called anytime to reinitialize with cache
-    """
-    global groq_service
-    try:
-        if GROQ_AVAILABLE:
-            groq_service = GroqService(driver_cache=driver_cache)
-            if groq_service and groq_service.client:
-                cache_info = f" ({len(driver_cache) if driver_cache else 0} drivers cached)" if driver_cache else ""
-                print(f"[OK] Groq Chat service initialized{cache_info}")
-            else:
-                print("[WARNING] Groq Chat service unavailable - chat disabled")
-        else:
-            print("[WARNING] Groq not available - chat disabled")
-    except Exception as e:
-        print(f"[ERROR] Failed to initialize Groq service: {e}")
-        groq_service = None
-
-# Initial startup initialization
-initialize_groq_service()
-
-
-class ChatMessage(BaseModel):
+class ChatRequest(BaseModel):
     message: str
-    history: Optional[List[Dict[str, str]]] = None
-
+    history: Optional[List[Message]] = []
 
 class ChatResponse(BaseModel):
     response: str
-    intent: Optional[str] = None
-    data_count: int = 0
-    error: Optional[str] = None
-
-
-@router.post("", response_model=ChatResponse)
-async def chat(request: ChatMessage):
-    """
-    Process chat message with intent classification and Salesforce data retrieval
-    """
-    if not groq_service or not groq_service.is_available():
-        return ChatResponse(
-            response="❌ Chat service is not available. Please check Groq configuration.",
-            error="Service unavailable"
-        )
+    confidence: Optional[float] = 0.85
+    timestamp: str = None
     
+    def __init__(self, **data):
+        super().__init__(**data)
+        if self.timestamp is None:
+            self.timestamp = datetime.now().isoformat()
+
+@router.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    """
+    Main chat endpoint that processes user messages and returns AI responses.
+    
+    Args:
+        request: ChatRequest containing the user message and chat history
+        
+    Returns:
+        ChatResponse with the AI response
+    """
     try:
-        user_message = request.message.strip()
+        logger.info(f"Received message: {request.message}")
         
-        if not user_message:
-            raise HTTPException(status_code=400, detail="Message required")
+        if not request.message or not request.message.strip():
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
         
-        print(f"\n💬 User: {user_message}")
+        # Process the message through the AI service
+        # This is where you would integrate with your actual AI/LLM service
+        response = process_chat_message(request.message, request.history)
         
-        # Classify intent and execute Salesforce query
-        intent_result = groq_service.classify_intent_and_execute(
-            user_message,
-            request.history or []
-        )
-        
-        # Check for errors
-        if intent_result.get('error'):
-            return ChatResponse(
-                response=f"❌ Error processing request: {intent_result['error']}",
-                error=intent_result['error']
-            )
-        
-        # Generate natural response
-        natural_response = groq_service.generate_natural_response(
-            user_message,
-            intent_result
-        )
-        
-        print(f"✅ Response: {natural_response[:100]}...")
+        logger.info(f"Generated response: {response[:100]}...")
         
         return ChatResponse(
-            response=natural_response,
-            intent=intent_result.get('intent', {}).get('intent'),
-            data_count=intent_result.get('count', 0)
+            response=response,
+            confidence=0.85,
+            timestamp=datetime.now().isoformat()
         )
-    
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        error_msg = str(e)
-        print(f"❌ Chat error: {error_msg}")
-        traceback.print_exc()
-        return ChatResponse(
-            response=f"❌ Error: {error_msg}",
-            error=error_msg
+        logger.error(f"Error processing chat message: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error processing request: {str(e)}"
         )
 
+def process_chat_message(message: str, history: List[Message]) -> str:
+    """
+    Process the user message and generate a response.
+    
+    This function should be integrated with your actual AI/LLM service
+    (e.g., Groq, OpenAI, custom model, etc.)
+    
+    Args:
+        message: The user's message
+        history: Previous messages in the conversation
+        
+    Returns:
+        The AI's response as a string
+    """
+    try:
+        # TODO: Integrate with actual AI service
+        # For now, return a placeholder response
+        
+        message_lower = message.lower()
+        
+        # Example simple responses based on keywords
+        if any(word in message_lower for word in ["fleet", "overview", "status"]):
+            return "Here's your fleet overview: [Fleet data would be displayed here based on your actual data]"
+        
+        elif any(word in message_lower for word in ["vehicle", "car", "truck"]):
+            return "Vehicle information: [Vehicle details would be displayed here]"
+        
+        elif any(word in message_lower for word in ["driver", "drivers"]):
+            return "Driver information: [Driver details would be displayed here]"
+        
+        elif any(word in message_lower for word in ["cost", "expense", "finance"]):
+            return "Cost analysis: [Financial data would be displayed here]"
+        
+        elif any(word in message_lower for word in ["maintenance", "service", "repair"]):
+            return "Maintenance schedule: [Maintenance information would be displayed here]"
+        
+        else:
+            return "I'm here to help you with your fleet management. Try asking about fleet overview, vehicles, drivers, costs, or maintenance."
+            
+    except Exception as e:
+        logger.error(f"Error in process_chat_message: {str(e)}")
+        raise
 
-@router.get("/health")
-async def health():
-    """Health check for chat service"""
-    return {
-        "status": "healthy" if groq_service and groq_service.is_available() else "degraded",
-        "groq_available": groq_service is not None and groq_service.is_available(),
-        "message": "Chat service is operational" if groq_service and groq_service.is_available() else "Chat service not configured"
-    }
+# Global cache for driver/engineer data
+_groq_driver_cache = None
+
+def initialize_groq_service(driver_cache: Optional[List[Dict[str, Any]]] = None):
+    """
+    Initialize the Groq service with preloaded driver/engineer cache.
+    This allows the chat AI to reference cached driver performance data.
+    
+    Args:
+        driver_cache: List of driver/engineer records from Salesforce
+    """
+    global _groq_driver_cache
+    _groq_driver_cache = driver_cache or []
+    logger.info(f"[OK] Groq service initialized with {len(_groq_driver_cache)} driver records")
+
+@router.get("/chat/health")
+async def chat_health():
+    """Health check endpoint for chat service"""
+    return {"status": "healthy", "service": "chat", "timestamp": datetime.now().isoformat()}

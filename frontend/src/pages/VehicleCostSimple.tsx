@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Loader, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
+import { TRADE_GROUP_PICKLIST, getAvailableTradeGroups, isUserRestricted, getDefaultTradeGroup } from '../config/tradeMapping';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, PieChart, Pie,
@@ -1020,19 +1021,78 @@ const leaseData: Lease[] = [
 // ─── HSBC Leases Tab ──────────────────────────────────────────────────────────
 function HSBCLeasesTab() {
   const [expandedLease, setExpandedLease] = useState<string | null>(null);
+  const [selectedTradeGroup, setSelectedTradeGroup] = useState<string | null>(null);
+  const [tradeGroups, setTradeGroups] = useState<string[]>([]);
+  const [loadingTrades, setLoadingTrades] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>('');
+  const [userIsRestricted, setUserIsRestricted] = useState(false);
+  const [userRestrictedTradeGroup, setUserRestrictedTradeGroup] = useState<string | null>(null);
 
-  const totalCapital = leaseData.reduce((sum, l) => {
+  // Check user restrictions on mount
+  useEffect(() => {
+    const userData = sessionStorage.getItem('user_data');
+    if (userData) {
+      const user = JSON.parse(userData);
+      const normalizedEmail = user.email.toLowerCase().trim();
+      setUserEmail(normalizedEmail);
+      
+      console.log('📧 Session user email:', user.email);
+      console.log('📧 Normalized email:', normalizedEmail);
+      
+      // Check if user is restricted
+      const restricted = isUserRestricted(normalizedEmail);
+      const defaultGroup = getDefaultTradeGroup(normalizedEmail);
+      
+      console.log('🔒 User restricted?', restricted);
+      console.log('🔒 Default group:', defaultGroup);
+      
+      if (restricted && defaultGroup) {
+        setUserIsRestricted(true);
+        setUserRestrictedTradeGroup(defaultGroup);
+        setSelectedTradeGroup(defaultGroup);
+        console.log('🔒 HSBC Tab: User restricted to trade group:', defaultGroup);
+      } else {
+        console.log('✅ HSBC Tab: User has full access');
+      }
+    }
+  }, []);
+
+  // Load trade groups on mount
+  useEffect(() => {
+    const loadTradeGroups = async () => {
+      try {
+        setLoadingTrades(true);
+        const res = await fetch(`${API_BASE_URL}/api/leases/trade-groups`);
+        const data = await res.json();
+        if (data.success) {
+          setTradeGroups(data.data || []);
+        }
+      } catch (error) {
+        console.error('Failed to load trade groups:', error);
+      } finally {
+        setLoadingTrades(false);
+      }
+    };
+    loadTradeGroups();
+  }, []);
+
+  // Filter leases by trade group
+  const filteredLeases = selectedTradeGroup
+    ? leaseData.filter(l => l.tradeGroup === selectedTradeGroup)
+    : leaseData;
+
+  const totalCapital = filteredLeases.reduce((sum, l) => {
     const n = parseFloat(l.capitalCost.replace(/£|,/g, ''));
     return sum + (isNaN(n) ? 0 : n);
   }, 0);
-  const totalVehicles = leaseData.reduce((s, l) => s + l.vehicles.length, 0);
+  const totalVehicles = filteredLeases.reduce((s, l) => s + l.vehicles.length, 0);
 
   return (
     <div>
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
         {[
-          { label: 'Total Leases', value: leaseData.length, color: colors.primary.default },
+          { label: 'Total Leases', value: filteredLeases.length, color: colors.primary.default },
           { label: 'Total Vehicles', value: totalVehicles, color: colors.support.green },
           { label: 'Total Capital Cost', value: `£${(totalCapital / 1000).toFixed(0)}K`, color: colors.support.orange },
         ].map(s => (
@@ -1043,13 +1103,56 @@ function HSBCLeasesTab() {
         ))}
       </div>
 
-      {/* Table */}
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <input
+            type="text"
+            placeholder="Search reg, model, HSBC..."
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              border: `1px solid ${colors.grayscale.border.default}`,
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontFamily: 'MontRegular',
+            }}
+          />
+        </div>
+        
+        {/* Trade Group Filter */}
+        <select
+          value={selectedTradeGroup || ''}
+          onChange={(e) => {
+            if (!userIsRestricted) {
+              setSelectedTradeGroup(e.target.value || null);
+            }
+          }}
+          disabled={userIsRestricted}
+          style={{
+            padding: '10px 14px',
+            border: `1px solid ${colors.grayscale.border.default}`,
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontFamily: 'MontRegular',
+            backgroundColor: userIsRestricted ? colors.grayscale.disabled : 'white',
+            cursor: userIsRestricted ? 'not-allowed' : 'pointer',
+            minWidth: '200px',
+            opacity: userIsRestricted ? 0.6 : 1,
+          }}
+          title={userIsRestricted ? `Your access is restricted to: ${userRestrictedTradeGroup}` : ''}
+        >
+          {!userIsRestricted && <option value="">All Trade Groups</option>}
+          {getAvailableTradeGroups(userEmail).map(tg => (
+            <option key={tg} value={tg}>{tg}</option>
+          ))}
+        </select>      {/* Table */}
       <div style={{ background: 'white', borderRadius: '10px', overflow: 'hidden', border: `1px solid ${colors.grayscale.border.default}` }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: colors.primary.subtle, borderBottom: `2px solid ${colors.grayscale.border.default}` }}>
-                {['Identifier', 'Type', 'Contract', 'Agreement Dates', 'Capital Cost', 'Monthly', 'Total Repayment', 'Vehicles', ''].map(h => (
+                {['Identifier', 'Type', 'Trade Group', 'Contract', 'Agreement Dates', 'Capital Cost', 'Monthly', 'Total Repayment', 'Vehicles', ''].map(h => (
                   <th key={h} style={{
                     padding: '12px 16px',
                     textAlign: (h === 'Capital Cost' || h === 'Monthly' || h === 'Total Repayment') ? 'right' : (h === 'Vehicles' || h === '') ? 'center' : 'left',
@@ -1063,7 +1166,7 @@ function HSBCLeasesTab() {
               </tr>
             </thead>
             <tbody>
-              {leaseData.map(lease => (
+              {filteredLeases.map(lease => (
                 <React.Fragment key={lease.identifier}>
                   <tr
                     onClick={() => setExpandedLease(expandedLease === lease.identifier ? null : lease.identifier)}
@@ -1084,6 +1187,13 @@ function HSBCLeasesTab() {
                         padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap',
                       }}>{lease.type}</span>
                     </td>
+                    <td style={{ padding: '12px 16px', fontSize: '13px', color: colors.grayscale.body }}>
+                      <span style={{
+                        background: lease.tradeGroup === 'Not Assigned' ? '#f3f4f6' : colors.primary.subtle,
+                        color: lease.tradeGroup === 'Not Assigned' ? colors.grayscale.subtle : colors.primary.darker,
+                        padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap',
+                      }}>{lease.tradeGroup || 'Not Assigned'}</span>
+                    </td>
                     <td style={{ padding: '12px 16px', color: colors.grayscale.body, fontSize: '13px', fontFamily: 'MontRegular' }}>{lease.contractNumber}</td>
                     <td style={{ padding: '12px 16px', color: colors.grayscale.body, fontSize: '13px', fontFamily: 'MontRegular', whiteSpace: 'nowrap' }}>{lease.startDate} → {lease.endDate}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', color: colors.primary.default, fontWeight: '600', fontSize: '13px', fontFamily: 'MontSemiBold', whiteSpace: 'nowrap' }}>{lease.capitalCost}</td>
@@ -1099,7 +1209,7 @@ function HSBCLeasesTab() {
 
                   {expandedLease === lease.identifier && (
                     <tr style={{ background: colors.primary.subtle, borderBottom: `1px solid ${colors.grayscale.border.default}` }}>
-                      <td colSpan={9} style={{ padding: '24px 16px' }}>
+                      <td colSpan={10} style={{ padding: '24px 16px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
                           <div>
                             <h3 style={{ fontSize: '14px', fontWeight: '600', color: colors.grayscale.title, marginBottom: '16px', fontFamily: 'MontSemiBold' }}>Cost Breakdown</h3>
@@ -1146,12 +1256,12 @@ function HSBCLeasesTab() {
       <div style={{ marginTop: '32px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
         <div style={{ background: 'white', padding: '16px', borderRadius: '8px', border: `1px solid ${colors.grayscale.border.default}` }}>
           <p style={{ fontSize: '12px', color: colors.grayscale.subtle, marginBottom: '8px', fontFamily: 'MontRegular' }}>Total Leases</p>
-          <p style={{ fontSize: '24px', fontWeight: 'bold', color: colors.primary.default, fontFamily: 'MontBold' }}>{leaseData.length}</p>
+          <p style={{ fontSize: '24px', fontWeight: 'bold', color: colors.primary.default, fontFamily: 'MontBold' }}>{filteredLeases.length}</p>
         </div>
         <div style={{ background: 'white', padding: '16px', borderRadius: '8px', border: `1px solid ${colors.grayscale.border.default}` }}>
           <p style={{ fontSize: '12px', color: colors.grayscale.subtle, marginBottom: '8px', fontFamily: 'MontRegular' }}>Total Vehicles</p>
           <p style={{ fontSize: '24px', fontWeight: 'bold', color: colors.primary.default, fontFamily: 'MontBold' }}>
-            {leaseData.reduce((sum, l) => sum + l.vehicles.length, 0)}
+            {filteredLeases.reduce((sum, l) => sum + l.vehicles.length, 0)}
           </p>
         </div>
         <div style={{ background: 'white', padding: '16px', borderRadius: '8px', border: `1px solid ${colors.grayscale.border.default}` }}>

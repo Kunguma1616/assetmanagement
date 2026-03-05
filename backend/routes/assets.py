@@ -105,7 +105,7 @@ CRITICAL INSTRUCTIONS:
             description = description.replace(char, "")
         return " ".join(description.split())
     except Exception as e:
-        print(f"❌ Error generating AI description: {e}")
+        print(f"[ERROR] Error generating AI description: {e}")
         return None
 
 
@@ -167,7 +167,7 @@ Format: clear structured text with bullet points. Be specific and data-driven. T
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"❌ Error generating AI insights: {e}")
+        print(f"[ERROR] Error generating AI insights: {e}")
         return f"AI insights generation failed: {str(e)}"
 
 
@@ -200,7 +200,7 @@ def get_available_engineers():
                 })
                 engineer_ids.append(r.get("Id"))
         except Exception as e:
-            print(f"⚠️  ServiceResource query failed: {e}")
+            print(f"[WARN] ServiceResource query failed: {e}")
 
         # ── Path 2: Fallback — build from allocation history ──
         if not engineers:
@@ -238,7 +238,7 @@ def get_available_engineers():
                 engineers.sort(key=lambda e: e["name"].lower())
                 print(f"   Fallback returned {len(engineers)} engineers")
             except Exception as e:
-                print(f"❌ Fallback also failed: {e}")
+                print(f"[ERROR] Fallback also failed: {e}")
                 import traceback; traceback.print_exc()
 
         # ── Enrich with contact numbers (only when Path 1 was used) ──
@@ -264,15 +264,15 @@ def get_available_engineers():
                         if sr_id and phone and sr_id not in contact_map:
                             contact_map[sr_id] = phone
                 except Exception as e:
-                    print(f"⚠️  Contact enrichment chunk failed: {e}")
+                    print(f"[WARN] Contact enrichment chunk failed: {e}")
             for eng in engineers:
                 eng["contact_number"] = contact_map.get(eng["id"], "")
 
-        print(f"✅ Returning {len(engineers)} engineers")
+        print(f"[OK] Returning {len(engineers)} engineers")
         return {"engineers": engineers}
 
     except Exception as e:
-        print(f"❌ Error fetching engineers: {e}")
+        print(f"[ERROR] Error fetching engineers: {e}")
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -295,7 +295,7 @@ def delete_vehicle_allocation(data: DeleteAllocationRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Allocation delete error: {e}")
+        print(f"[ERROR] Allocation delete error: {e}")
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -347,7 +347,7 @@ def update_vehicle_allocation(data: UpdateAllocationRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Allocation update error: {e}")
+        print(f"[ERROR] Allocation update error: {e}")
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

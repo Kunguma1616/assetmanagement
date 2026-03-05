@@ -143,7 +143,7 @@ def check_vcr_submission_status(vehicle_input: str):
         vcr_result = sf_service.execute_soql(vcr_query)
         
         if not vcr_result:
-            print(f"[COMPLIANCE] ⚠ No VCR exists for {vehicle_name}")
+            print(f"[COMPLIANCE] [WARN] No VCR exists for {vehicle_name}")
             return {
                 "vehicle": vehicle_name,
                 "engineer": engineer_name,
@@ -204,7 +204,7 @@ def check_vcr_submission_status(vehicle_input: str):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[COMPLIANCE] ❌ Error: {e}")
+        print(f"[COMPLIANCE] [ERROR] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -245,7 +245,7 @@ def get_compliance_dashboard_all_allocated():
         allocated_vehicles = sf_service.execute_soql(allocation_query)
         
         if not allocated_vehicles:
-            print(f"[VCR_DASHBOARD] ⚠ No allocated vehicles found")
+            print(f"[VCR_DASHBOARD] [WARN] No allocated vehicles found")
             return {
                 "totalAllocated": 0,
                 "submittedCount": 0,
@@ -323,7 +323,7 @@ def get_compliance_dashboard_all_allocated():
                     
                     if days_since <= 14:
                         # ✅ SUBMITTED (within 14 days)
-                        print(f"[VCR_DASHBOARD] ✅ {vehicle_name}: SUBMITTED ({days_since} days ago)")
+                        print(f"[VCR_DASHBOARD] [OK] {vehicle_name}: SUBMITTED ({days_since} days ago)")
                         submitted_list.append({
                             "vehicleId": vehicle_id,
                             "vanName": vehicle_name,
@@ -335,7 +335,7 @@ def get_compliance_dashboard_all_allocated():
                         })
                     else:
                         # ❌ OVERDUE (older than 14 days)
-                        print(f"[VCR_DASHBOARD] ❌ {vehicle_name}: OVERDUE ({days_since} days ago)")
+                        print(f"[VCR_DASHBOARD] [ERROR] {vehicle_name}: OVERDUE ({days_since} days ago)")
                         not_submitted_list.append({
                             "vehicleId": vehicle_id,
                             "vanName": vehicle_name,
@@ -347,7 +347,7 @@ def get_compliance_dashboard_all_allocated():
                         })
             else:
                 # ❌ NO VCR REPORT AT ALL
-                print(f"[VCR_DASHBOARD] ❌ {vehicle_name}: MISSING (no report)")
+                print(f"[VCR_DASHBOARD] [ERROR] {vehicle_name}: MISSING (no report)")
                 not_submitted_list.append({
                     "vehicleId": vehicle_id,
                     "vanName": vehicle_name,
@@ -373,7 +373,7 @@ def get_compliance_dashboard_all_allocated():
         }
 
     except Exception as e:
-        print(f"[VCR_DASHBOARD] ❌ Error: {e}")
+        print(f"[VCR_DASHBOARD] [ERROR] Error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -458,7 +458,7 @@ def search_vcr_by_van(van_number_or_reg: str):
                         "id": img["Id"],
                         "title": img.get("Title", "Image"),
                         "fileExtension": img.get("FileExtension", ""),
-                        "imageUrl": f"http://localhost:8000/api/vehicle-condition/image/{img['Id']}"
+                        "imageUrl": f"/api/vehicle-condition/image/{img['Id']}"
                     })
         
         return {
@@ -476,7 +476,7 @@ def search_vcr_by_van(van_number_or_reg: str):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[VCR_SEARCH] ❌ Error: {e}")
+        print(f"[VCR_SEARCH] [ERROR] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -512,32 +512,32 @@ async def proxy_image(version_id: str):
         print(f"[IMAGE] {version_id} → status={response.status_code}, size={len(response.content)} bytes, type={response.headers.get('content-type', '?')}")
 
         if response.status_code == 401:
-            print(f"[IMAGE] ❌ 401 Unauthorized - token might be expired")
+            print(f"[IMAGE] [ERROR] 401 Unauthorized - token might be expired")
             print(f"[IMAGE] Response: {response.text[:200]}")
             raise HTTPException(status_code=401, detail="Salesforce token expired")
 
         if response.status_code == 404:
-            print(f"[IMAGE] ❌ 404 Not Found - image ID might be invalid")
+            print(f"[IMAGE] [ERROR] 404 Not Found - image ID might be invalid")
             print(f"[IMAGE] Response: {response.text[:200]}")
             raise HTTPException(status_code=404, detail=f"Image not found: {version_id}")
 
         if response.status_code != 200:
-            print(f"[IMAGE] ❌ HTTP {response.status_code}")
+            print(f"[IMAGE] [ERROR] HTTP {response.status_code}")
             print(f"[IMAGE] Response: {response.text[:200]}")
             raise HTTPException(status_code=response.status_code, detail=f"Error fetching image: HTTP {response.status_code}")
 
         if len(response.content) == 0:
-            print(f"[IMAGE] ❌ Empty content")
+            print(f"[IMAGE] [ERROR] Empty content")
             raise HTTPException(status_code=500, detail="Empty image")
 
         content_type = response.headers.get("content-type", "image/jpeg")
 
         if "text/html" in content_type or "text/plain" in content_type:
-            print(f"[IMAGE] ❌ Got wrong content type: {content_type}")
+            print(f"[IMAGE] [ERROR] Got wrong content type: {content_type}")
             print(f"[IMAGE] Body: {response.text[:300]}")
             raise HTTPException(status_code=403, detail="Got HTML/text instead of image")
 
-        print(f"[IMAGE] ✅ Success {version_id} - {len(response.content)} bytes of {content_type}")
+        print(f"[IMAGE] [OK] Success {version_id} - {len(response.content)} bytes of {content_type}")
 
         return Response(
             content=response.content,
@@ -550,12 +550,12 @@ async def proxy_image(version_id: str):
         )
 
     except httpx.TimeoutException:
-        print(f"[IMAGE] ❌ Timeout for {version_id}")
+        print(f"[IMAGE] [ERROR] Timeout for {version_id}")
         raise HTTPException(status_code=504, detail="Timeout")
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[IMAGE] ❌ Error: {e}")
+        print(f"[IMAGE] [ERROR] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -594,7 +594,7 @@ def get_single_form_with_images(form_id: str):
                 images.append({
                     "id": img["Id"],
                     "title": img.get("Title", "Image"),
-                    "url": f"http://localhost:8000/api/vehicle-condition/image/{img['Id']}"
+                    "url": f"/api/vehicle-condition/image/{img['Id']}"
                 })
 
     return {"form": form_data, "images": images}
@@ -717,5 +717,5 @@ def get_vehicle_condition_dashboard():
         }
 
     except Exception as e:
-        print(f"[DASHBOARD] ❌ Error: {e}")
+        print(f"[DASHBOARD] [ERROR] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

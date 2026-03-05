@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import sys
 import os
 
@@ -16,11 +17,11 @@ except ImportError:
 # Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from routes.dashboard import router as dashboard_router      # handles /api/dashboard/*
-from routes.assetdashboad import router as asset_dashboard_router  # handles /api/dashboard/* (asset-specific routes)
-from routes.Asset_allocation import router as allocation_router    # handles /api/allocation/*
-from routes.Asset_cost import router as asset_cost_router          # handles /api/cost/* (asset costs)
-from routes.Assetpercost import router as asset_per_cost_router    # handles /api/asset-cost/* (per-asset costs)
+from routes.dashboard import router as dashboard_router
+from routes.assetdashboad import router as asset_dashboard_router
+from routes.Asset_allocation import router as allocation_router
+from routes.Asset_cost import router as asset_cost_router
+from routes.Assetpercost import router as asset_per_cost_router
 from routes.webfleet import router as webfleet_router, load_engineers_with_scores, start_scheduler
 from routes.vehicles import router as vehicles_router
 from routes.assets import router as assets_router
@@ -30,6 +31,8 @@ from routes.auth import router as auth_router
 from routes.uploadvehicle import router as upload_router
 from routes.cost import router as cost_router
 from routes.vehicle_condition import router as vehicle_condition_router
+from routes.register_asset import router as register_asset_router
+from routes.leases import router as leases_router
 
 # ─────────────────────────────────────────────────────────
 # GLOBAL DRIVER CACHE
@@ -38,8 +41,8 @@ GLOBAL_DRIVER_CACHE = []
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Fleet Health Monitor API",
-    description="Backend API for fleet management dashboard",
+    title="Fleet & Asset Management System API",
+    description="Backend API for Fleet & Asset Management System",
     version="1.0.0"
 )
 
@@ -63,10 +66,6 @@ app.add_middleware(
 # ─────────────────────────────────────────────────────────
 # ROUTERS
 # ─────────────────────────────────────────────────────────
-# asset_dashboard_router (assetdashboad.py) — asset-specific endpoints:
-#   /api/dashboard/summary, /asset-lookup, /asset-cost-*, /get-assets, etc.
-# dashboard_router (dashboard.py) — vehicle endpoints:
-#   /api/dashboard/vehicle-summary, /vehicles-by-status, /cost-analysis, etc.
 app.include_router(asset_dashboard_router)
 app.include_router(dashboard_router)
 app.include_router(allocation_router)
@@ -81,6 +80,8 @@ app.include_router(upload_router)
 app.include_router(auth_router)
 app.include_router(vehicle_condition_router)
 app.include_router(cost_router)
+app.include_router(register_asset_router)
+app.include_router(leases_router)
 
 # ─────────────────────────────────────────────────────────
 # STARTUP EVENT
@@ -115,22 +116,50 @@ async def load_driver_cache():
         GLOBAL_DRIVER_CACHE = []
 
 
-@app.get("/")
-async def root():
-    return {
-        "status":  "running",
-        "message": "Fleet Health Monitor API",
-        "version": "1.0.0",
-    }
-
-
+# ─────────────────────────────────────────────────────────
+# HEALTH CHECK
+# ─────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
 
 
+# ─────────────────────────────────────────────────────────
+# SERVE FRONTEND STATIC FILES
+# ─────────────────────────────────────────────────────────
+static_dir = "/app/static"
+
+# Only mount static files if the directory exists
+if os.path.isdir(f"{static_dir}/assets"):
+    app.mount("/assets", StaticFiles(directory=f"{static_dir}/assets"), name="assets")
+elif os.path.isdir("./static/assets"):
+    # Fallback to local static directory for development
+    app.mount("/assets", StaticFiles(directory="./static/assets"), name="assets")
+else:
+    # Create placeholder directory to avoid errors
+    os.makedirs("./static/assets", exist_ok=True)
+    try:
+        app.mount("/assets", StaticFiles(directory="./static/assets"), name="assets")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not mount static assets: {e}")
+
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    # First check if it's an actual file in the static dir (logo, fonts, etc.)
+    file_path = os.path.join(static_dir, full_path)
+    if full_path and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    # Serve React SPA index
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    # Dev mode: static files not built yet — return 404 instead of crashing
+    raise HTTPException(status_code=404, detail="Frontend not built yet. Run 'npm run build'.")
+
+
 if __name__ == "__main__":
     import uvicorn
-    port = 8000
+    port = 8080
     print(f"[LAUNCH] Starting server on port {port}...")
     uvicorn.run(app, host="0.0.0.0", port=port)

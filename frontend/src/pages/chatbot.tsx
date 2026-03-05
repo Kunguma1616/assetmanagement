@@ -51,7 +51,6 @@ const formatTime = (date: Date | string): string => {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
-
   });
 };
 
@@ -287,8 +286,8 @@ export default function ChatBot() {
     if (!window.confirm('Delete this message?')) return;
     setSessions((prev) =>
       prev.map((s) =>
-        s.id === sessionId 
-          ? { ...s, messages: s.messages.filter((m) => m.id !== messageId), updatedAt: new Date() } 
+        s.id === sessionId
+          ? { ...s, messages: s.messages.filter((m) => m.id !== messageId), updatedAt: new Date() }
           : s
       )
     );
@@ -297,10 +296,10 @@ export default function ChatBot() {
   const clearConversation = (sessionId: string | null) => {
     if (!sessionId) return;
     if (!window.confirm('Clear all messages in this conversation?')) return;
-    setSessions((prev) => 
-      prev.map((s) => 
-        s.id === sessionId 
-          ? { ...s, messages: [], updatedAt: new Date() } 
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === sessionId
+          ? { ...s, messages: [], updatedAt: new Date() }
           : s
       )
     );
@@ -308,7 +307,7 @@ export default function ChatBot() {
 
   const sendMessage = async (directQuestion?: string) => {
     console.log('📤 Send button clicked - isProcessing:', isProcessing);
-    
+
     if (isProcessing) {
       console.log('⏸️ Already processing, ignoring click');
       return;
@@ -331,7 +330,7 @@ export default function ChatBot() {
 
     const question = String(directQuestion || questionInput).trim();
     console.log('📨 Question to send:', question);
-    
+
     if (!question) {
       console.log('❌ Question is empty');
       return;
@@ -348,10 +347,10 @@ export default function ChatBot() {
       type: "default",
     };
 
-    setSessions(prev => 
-      prev.map(s => 
-        s.id === sessionId 
-          ? { ...s, messages: [...(s.messages || []), userMessage], updatedAt: new Date() } 
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === sessionId
+          ? { ...s, messages: [...(s.messages || []), userMessage], updatedAt: new Date() }
           : s
       )
     );
@@ -366,15 +365,15 @@ export default function ChatBot() {
     console.log('🔄 Processing started, sending to backend...');
 
     try {
-      const history = [...(currentSession.messages || []), userMessage].map(m => ({ 
-        role: m.role, 
-        content: m.content 
+      const history = [...(currentSession.messages || []), userMessage].map(m => ({
+        role: m.role,
+        content: m.content
       }));
 
       const base = API_BASE_URL || '';
       const url = `${base}/api/chat`;
       console.log('🌐 API URL:', url);
-      
+
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -408,10 +407,10 @@ export default function ChatBot() {
         },
       };
 
-      setSessions(prev => 
-        prev.map(s => 
-          s.id === sessionId 
-            ? { ...s, messages: [...(s.messages || []), botMessage], updatedAt: new Date() } 
+      setSessions(prev =>
+        prev.map(s =>
+          s.id === sessionId
+            ? { ...s, messages: [...(s.messages || []), botMessage], updatedAt: new Date() }
             : s
         )
       );
@@ -426,10 +425,10 @@ export default function ChatBot() {
         type: "alert",
       };
 
-      setSessions(prev => 
-        prev.map(s => 
-          s.id === sessionId 
-            ? { ...s, messages: [...(s.messages || []), errorMessage], updatedAt: new Date() } 
+      setSessions(prev =>
+        prev.map(s =>
+          s.id === sessionId
+            ? { ...s, messages: [...(s.messages || []), errorMessage], updatedAt: new Date() }
             : s
         )
       );
@@ -451,7 +450,7 @@ export default function ChatBot() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const filteredSessions = sessions.filter(s => 
+  const filteredSessions = sessions.filter(s =>
     s.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -478,7 +477,7 @@ export default function ChatBot() {
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Fleet AI</h2>
+                <h2 className="text-lg font-bold text-white">Fleet & Asset AI Assistant</h2>
                 <p className="text-xs text-slate-400"></p>
               </div>
             </div>
@@ -572,17 +571,16 @@ export default function ChatBot() {
               <div>
                 <h1 className="text-lg font-bold flex items-center gap-2" style={{ color: '#27549D', fontFamily: 'MontBold' }}>
                   <span className="text-xl"></span>
-                  Chumley Copilot AI 
+                  Chumley Copilot AI
                 </h1>
                 <p className="text-xs" style={{ color: '#646F86', fontFamily: 'MontRegular' }}>
-                  
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <button 
-                onClick={() => createNewSession()} 
+              <button
+                onClick={() => createNewSession()}
                 className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all font-medium text-xs flex items-center gap-1"
               >
                 <Plus size={16} />
@@ -610,12 +608,12 @@ export default function ChatBot() {
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-6 shadow-xl">
                 <Sparkles size={40} className="text-white" />
               </div>
-              
+
               <h2 className="text-3xl font-bold text-slate-800 mb-3">
                 Welcome to Chumey Copilot
               </h2>
               <p className="text-lg text-slate-600 mb-8 max-w-2xl">
-                Your intelligent partner for comprehensive fleet management, analytics, and decision-making
+                Your intelligent assistant for comprehensive fleet and asset management, analytics, and strategic decision-making
               </p>
 
               <div className="w-full max-w-4xl">
@@ -626,7 +624,7 @@ export default function ChatBot() {
                   </p>
                   <p className="text-xs text-slate-500">Click to ask</p>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {QUICK_ACTIONS.map((action, index) => (
                     <button
@@ -703,17 +701,17 @@ export default function ChatBot() {
                           <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
                             {message.content}
                           </p>
-                          
+
                           <div className={`flex items-center gap-3 mt-3 text-xs ${message.role === "user" ? "text-blue-100" : "text-slate-400"}`}>
                             <span className="font-medium">{formatTime(message.createdAt)}</span>
-                            
+
                             {message.metadata?.processingTime && (
                               <>
                                 <span>•</span>
                                 <span>{(message.metadata.processingTime / 1000).toFixed(1)}s</span>
                               </>
                             )}
-                            
+
                             {message.role === "assistant" && (
                               <div className="flex items-center gap-1 ml-auto">
                                 <button
@@ -736,7 +734,7 @@ export default function ChatBot() {
                                 </button>
                               </div>
                             )}
-                            
+
                             {message.role === "user" && (
                               <button
                                 onClick={() => deleteMessage(activeSessionId as string, message.id)}

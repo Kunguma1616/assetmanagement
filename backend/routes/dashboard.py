@@ -20,12 +20,12 @@ def get_mot_due_count(sf):
         print(f"🔍 [get_mot_due_count] Executing: {query.strip()}")
         vehicles = sf.execute_soql(query)
         count = len(vehicles) if vehicles else 0
-        print(f"✅ [get_mot_due_count] Found {count} vehicles with Next_MOT_Date__c <= NEXT_N_DAYS:30")
+        print(f"[OK] [get_mot_due_count] Found {count} vehicles with Next_MOT_Date__c <= NEXT_N_DAYS:30")
         if count > 0 and vehicles:
             print(f"   Sample: {vehicles[0]}")
         return count
     except Exception as e:
-        print(f"⚠️  [get_mot_due_count] Query failed: {e}")
+        print(f"[WARN] [get_mot_due_count] Query failed: {e}")
         import traceback
         traceback.print_exc()
         return 0
@@ -45,10 +45,10 @@ def get_service_due_count(sf):
         print(f"🔍 [get_service_due_count] Executing: {query.strip()}")
         vehicles = sf.execute_soql(query)
         count = len(vehicles) if vehicles else 0
-        print(f"✅ [get_service_due_count] Found {count} vehicles with service due in 30 days")
+        print(f"[OK] [get_service_due_count] Found {count} vehicles with service due in 30 days")
         return count
     except Exception as e:
-        print(f"⚠️  [get_service_due_count] Query failed: {e}")
+        print(f"[WARN] [get_service_due_count] Query failed: {e}")
         import traceback
         traceback.print_exc()
         return 0
@@ -68,12 +68,12 @@ def get_tax_due_count(sf):
         print(f"🔍 [get_tax_due_count] Executing: {query.strip()}")
         vehicles = sf.execute_soql(query)
         count = len(vehicles) if vehicles else 0
-        print(f"✅ [get_tax_due_count] Found {count} vehicles with road tax due <= 30 days")
+        print(f"[OK] [get_tax_due_count] Found {count} vehicles with road tax due <= 30 days")
         if count > 0 and vehicles:
             print(f"   Sample: {vehicles[0]}")
         return count
     except Exception as e:
-        print(f"⚠️  [get_tax_due_count] Tax field not available: {e}")
+        print(f"[WARN] [get_tax_due_count] Tax field not available: {e}")
         return 0
 
 
@@ -105,7 +105,7 @@ def debug_statuses():
             "status_counts": status_counts,
         }
     except Exception as e:
-        print(f"❌ Debug error: {e}")
+        print(f"[ERROR] Debug error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -150,7 +150,7 @@ def debug_mot_data():
                 "note": "This shows which vehicles have Next_MOT_Date__c set. Check if these dates are in the future."
             }
     except Exception as e:
-        print(f"❌ Debug MOT error: {e}")
+        print(f"[ERROR] Debug MOT error: {e}")
         import traceback
         traceback.print_exc()
         return {
@@ -209,7 +209,7 @@ def debug_fields():
             else:
                 return {"error": "No vehicles found in Salesforce"}
     except Exception as e:
-        print(f"❌ Debug fields error: {e}")
+        print(f"[ERROR] Debug fields error: {e}")
         import traceback
         traceback.print_exc()
         return {
@@ -288,14 +288,14 @@ def get_vehicle_summary():
                 elif sf_status not in EXCLUDED_STATUSES:
                     unmapped_statuses[sf_status] = unmapped_statuses.get(sf_status, 0) + 1
 
-        print(f"✅ Status values found in Salesforce:")
+        print(f"[OK] Status values found in Salesforce:")
         for status, count in sorted(status_values_found.items()):
             print(f"   '{status}': {count}")
-        print(f"✅ Current Vehicles (excl. Sold/Written Off): {total}")
-        print(f"✅ Garage (Status__c in GARAGE_STATUSES): {status_counts['garage']}")
-        print(f"✅ Mapped status counts: {status_counts}")
+        print(f"[OK] Current Vehicles (excl. Sold/Written Off): {total}")
+        print(f"[OK] Garage (Status__c in GARAGE_STATUSES): {status_counts['garage']}")
+        print(f"[OK] Mapped status counts: {status_counts}")
         if unmapped_statuses:
-            print(f"⚠️  Unmapped statuses: {unmapped_statuses}")
+            print(f"[WARN] Unmapped statuses: {unmapped_statuses}")
 
         # Get date-based counts (independent of Status__c)
         print("📊 Getting Service due count...")
@@ -318,7 +318,7 @@ def get_vehicle_summary():
         }
 
     except Exception as e:
-        print(f"❌ Dashboard error: {e}")
+        print(f"[ERROR] Dashboard error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -442,7 +442,7 @@ def get_vehicles_by_status(status: str):
                         v['service_cost'] = cost_map.get(vid, 0)
                         v['maintenance_cost'] = maint_map.get(vid, 0)
                 except Exception as cost_err:
-                    print(f"⚠️  Cost query failed (non-fatal): {cost_err}")
+                    print(f"[WARN] Cost query failed (non-fatal): {cost_err}")
         
         return {
             "status": sf_status,
@@ -451,7 +451,7 @@ def get_vehicles_by_status(status: str):
         }
         
     except Exception as e:
-        print(f"❌ Error fetching vehicles by status: {e}")
+        print(f"[ERROR] Error fetching vehicles by status: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -475,10 +475,10 @@ def get_vehicles_service_due(days: int = 30):
             ORDER BY Trade_Group__c ASC, Van_Number__c ASC
         """
         vehicles = sf.execute_soql(query)
-        print(f"✅ Service due vehicles found: {len(vehicles)}")
+        print(f"[OK] Service due vehicles found: {len(vehicles)}")
         return {"count": len(vehicles), "vehicles": vehicles}
     except Exception as e:
-        print(f"❌ Error fetching service due vehicles: {e}")
+        print(f"[ERROR] Error fetching service due vehicles: {e}")
         import traceback
         traceback.print_exc()
         return {"count": 0, "vehicles": []}
@@ -501,10 +501,10 @@ def get_vehicles_mot_due(days: int = 30):
             ORDER BY Next_MOT_Date__c ASC
         """
         vehicles = sf.execute_soql(query)
-        print(f"✅ MOT due vehicles found: {len(vehicles)}")
+        print(f"[OK] MOT due vehicles found: {len(vehicles)}")
         return {"count": len(vehicles), "vehicles": vehicles}
     except Exception as e:
-        print(f"❌ Error fetching MOT due vehicles: {e}")
+        print(f"[ERROR] Error fetching MOT due vehicles: {e}")
         import traceback
         traceback.print_exc()
         # Try alternative field name
@@ -518,10 +518,10 @@ def get_vehicles_mot_due(days: int = 30):
                 ORDER BY MOT_Due_Date__c ASC
             """
             vehicles_alt = sf.execute_soql(query_alt)
-            print(f"✅ MOT due vehicles (alt) found: {len(vehicles_alt)}")
+            print(f"[OK] MOT due vehicles (alt) found: {len(vehicles_alt)}")
             return {"count": len(vehicles_alt), "vehicles": vehicles_alt}
         except:
-            print("⚠️  Alternative field name also failed, returning empty list")
+            print("[WARN] Alternative field name also failed, returning empty list")
             return {"count": 0, "vehicles": []}
 
 
@@ -543,10 +543,10 @@ def get_vehicles_tax_due(days: int = 30):
             ORDER BY Trade_Group__c ASC, Van_Number__c ASC
         """
         vehicles = sf.execute_soql(query)
-        print(f"✅ Tax due vehicles found: {len(vehicles)}")
+        print(f"[OK] Tax due vehicles found: {len(vehicles)}")
         return {"count": len(vehicles), "vehicles": vehicles}
     except Exception as e:
-        print(f"❌ Error fetching road tax due vehicles: {e}")
+        print(f"[ERROR] Error fetching road tax due vehicles: {e}")
         import traceback
         traceback.print_exc()
         return {"count": 0, "vehicles": []}
@@ -742,7 +742,7 @@ def get_cost_analysis():
         }
         
     except Exception as e:
-        print(f"❌ Error fetching cost analysis: {e}")
+        print(f"[ERROR] Error fetching cost analysis: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -787,7 +787,7 @@ def get_drivers_from_excel():
         engineers_result = sf.execute_soql(engineers_query)
         
         if not engineers_result:
-            print("⚠️ No engineers found in Salesforce")
+            print("[WARN] No engineers found in Salesforce")
             return {
                 "success": True,
                 "statistics": {
@@ -823,7 +823,7 @@ def get_drivers_from_excel():
                 if vehicle_id:
                     vehicle_to_van[vehicle_id] = display_name if display_name else 'N/A'
         except Exception as e:
-            print(f"⚠️ Error fetching vehicles: {e}")
+            print(f"[WARN] Error fetching vehicles: {e}")
             vehicle_to_van = {}
         
         # Second: Get active allocations by Service_Resource ID
@@ -854,7 +854,7 @@ def get_drivers_from_excel():
                 if service_resource_id and service_resource_id not in service_resource_to_van:
                     service_resource_to_van[service_resource_id] = van_number
         except Exception as e:
-            print(f"⚠️ Error fetching allocations: {e}")
+            print(f"[WARN] Error fetching allocations: {e}")
             service_resource_to_van = {}
         
         # Fetch Webfleet service and get ALL data at once
@@ -868,7 +868,7 @@ def get_drivers_from_excel():
             if not isinstance(scores_by_email, dict):
                 scores_by_email = {}
         except Exception as e:
-            print(f"❌ Error pre-computing scores: {e}")
+            print(f"[ERROR] Error pre-computing scores: {e}")
             drivers_by_email = {}
             scores_by_email = {}
         
@@ -924,7 +924,7 @@ def get_drivers_from_excel():
                 drivers.append(driver)
                 
             except Exception as e:
-                print(f"⚠️ Error processing engineer {engineer_name}: {e}")
+                print(f"[WARN] Error processing engineer {engineer_name}: {e}")
                 engineer_id = engineer.get('Id', '')
                 drivers.append({
                     "name": engineer.get('Name', 'Unknown'),

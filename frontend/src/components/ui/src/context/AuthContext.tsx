@@ -21,7 +21,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'auth_user';
-const API_BASE_URL = 'http://localhost:5000';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -49,7 +48,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/api/auth/signout`, {
+      await fetch('/api/auth/signout', {
         method: 'POST',
         credentials: 'include',
       });

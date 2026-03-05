@@ -19,10 +19,10 @@ const Index = () => {
       {/* Hero Section */}
       <div className="px-6 py-20 text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-4">
-          Fleet Health Monitor
+          Fleet & Asset Management System
         </h1>
         <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-          Manage your vehicle fleet with real-time insights, driver performance tracking, and comprehensive asset management.
+          Comprehensive fleet and asset management with real-time insights, driver performance tracking, and complete vehicle lifecycle management.
         </p>
       </div>
 

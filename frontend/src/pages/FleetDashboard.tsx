@@ -275,10 +275,10 @@ const FleetDashboard: React.FC = () => {
             <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: '#27549D', fontFamily: 'MontBold' }}>
               <img
                 src="/aspect-logo-icon.svg"
-                alt="Aspect Logo"
+                alt="System Logo"
                 className="h-10 w-auto"
               />
-              Aspect Fleet Dashboard
+              Fleet & Asset Management System
             </h1>
             <div className="mt-2 flex items-center gap-4 font-light" style={{ color: '#848EA3', fontFamily: 'MontRegular' }}>
               <span className="flex items-center gap-2">

@@ -235,7 +235,7 @@ export default function UploadAsset() {
 
       console.log('📤 Sending payload:', payload);
 
-      const response = await fetch('http://localhost:8000/api/assets/upload', {
+      const response = await fetch('/api/assets/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -628,7 +628,6 @@ export default function UploadAsset() {
                       <SelectItem value="To be Collected by Engineer">To be Collected by Engineer</SelectItem>
                       <SelectItem value="Awaiting Quote">Awaiting Quote</SelectItem>
                       <SelectItem value="Awaiting Approval">Awaiting Approval</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
                       <SelectItem value="Insurance">Insurance</SelectItem>
                     </SelectContent>
                   </Select>

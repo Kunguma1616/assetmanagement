@@ -40,7 +40,7 @@ def _get_type_id_to_name_map(sf) -> dict:
                     if r.get("Id") and r.get("Name"):
                         id_to_name[r["Id"]] = r["Name"]
                 if id_to_name:
-                    print(f"✅ ID→Name map from [{obj}]: {len(id_to_name)} entries")
+                    print(f"[OK] ID→Name map from [{obj}]: {len(id_to_name)} entries")
                     return id_to_name
         except Exception:
             continue
@@ -66,10 +66,10 @@ def _get_type_id_to_name_map(sf) -> dict:
                 break
             offset += 2000
         except Exception as e:
-            print(f"⚠️  Relationship traversal failed: {e}")
+            print(f"[WARN] Relationship traversal failed: {e}")
             break
 
-    print(f"✅ ID→Name map via relationship: {len(id_to_name)} entries")
+    print(f"[OK] ID→Name map via relationship: {len(id_to_name)} entries")
     return id_to_name
 
 
@@ -100,11 +100,11 @@ def _discover_price_field(sf) -> str:
         try:
             rows = sf.execute_soql(f"SELECT {field} FROM Asset WHERE {field} != NULL LIMIT 5")
             if rows and any(_safe_float(r.get(field)) > 0 for r in rows):
-                print(f"✅ Price field: [{field}]")
+                print(f"[OK] Price field: [{field}]")
                 return field
         except Exception:
             continue
-    print("⚠️  No price field found — defaulting to Price")
+    print("[WARN] No price field found — defaulting to Price")
     return "Price"
 
 
@@ -134,7 +134,7 @@ def get_summary():
     try:
         sf = SalesforceService()
     except Exception as e:
-        print(f"❌ Salesforce connection failed: {e}")
+        print(f"[ERROR] Salesforce connection failed: {e}")
         return {
             "total_assets": 0, "available_assets": 0,
             "distinct_types": 0, "asset_types": [],
@@ -145,7 +145,7 @@ def get_summary():
     def safe(fn, fallback=None):
         try: return fn()
         except Exception as exc:
-            print(f"⚠️  sub-query failed: {exc}")
+            print(f"[WARN] sub-query failed: {exc}")
             return fallback
 
     total_assets     = safe(lambda: _safe_count(sf, "SELECT COUNT() FROM Asset"), 0)
@@ -197,9 +197,9 @@ def get_summary():
                 "created_date": r.get("CreatedDate"),
             })
     except Exception as e:
-        print(f"⚠️  Allocations: {e}")
+        print(f"[WARN] Allocations: {e}")
 
-    print(f"✅ Summary: total={total_assets}, available={available}, types={len(named_types)}, cost=£{total_cost}")
+    print(f"[OK] Summary: total={total_assets}, available={available}, types={len(named_types)}, cost=£{total_cost}")
     return {
         "total_assets":       total_assets,
         "available_assets":   available,
@@ -261,7 +261,7 @@ def get_asset_lookup(limit: int = 500, offset: int = 0):
             } for a in assets],
         }
     except Exception as e:
-        print(f"❌ asset-lookup:\n{traceback.format_exc()}")
+        print(f"[ERROR] asset-lookup:\n{traceback.format_exc()}")
         return {"success": True, "total": 0, "returned": 0, "offset": offset, "assets": []}
 
 
@@ -298,10 +298,10 @@ def get_asset_cost_summary():
                 total_spend = sum(_safe_float(r.get(price_field)) for r in rows)
 
         total_spend = round(total_spend, 2)
-        print(f"✅ asset-cost-summary: £{total_spend}")
+        print(f"[OK] asset-cost-summary: £{total_spend}")
         return {"success": True, "total_spend": total_spend, "priced_asset_count": asset_count}
     except Exception as e:
-        print(f"❌ asset-cost-summary: {e}")
+        print(f"[ERROR] asset-cost-summary: {e}")
         return {"success": False, "total_spend": 0, "error": str(e)}
 
 
@@ -340,10 +340,10 @@ def get_asset_costs():
                 "status":       a.get("Status"),
             })
 
-        print(f"✅ asset-costs: {len(asset_list)} assets, £{round(total_cost, 2)}")
+        print(f"[OK] asset-costs: {len(asset_list)} assets, £{round(total_cost, 2)}")
         return {"success": True, "assets": asset_list, "total": len(asset_list), "total_cost": round(total_cost, 2)}
     except Exception as e:
-        print(f"❌ asset-costs: {e}")
+        print(f"[ERROR] asset-costs: {e}")
         return {"success": False, "assets": [], "total": 0, "total_cost": 0, "error": str(e)}
 
 
@@ -386,10 +386,10 @@ def get_asset_cost_by_type():
             for k in sorted(type_costs, key=lambda x: -type_costs[x])
             if type_costs[k] > 0
         ]
-        print(f"✅ asset-cost-by-type: {len(cost_by_type)} types")
+        print(f"[OK] asset-cost-by-type: {len(cost_by_type)} types")
         return {"success": True, "cost_by_type": cost_by_type, "total_types": len(cost_by_type)}
     except Exception as e:
-        print(f"❌ asset-cost-by-type: {e}")
+        print(f"[ERROR] asset-cost-by-type: {e}")
         return {"success": False, "cost_by_type": [], "error": str(e)}
 
 

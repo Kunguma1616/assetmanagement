@@ -21,10 +21,10 @@ def get_total_cost():
             "SELECT SUM(Price) totalPurchaseSpend FROM Asset WHERE Price != NULL"
         )
         total = _safe_float(rows[0].get("expr0") if rows else 0)
-        print(f"✅ Total Cost: £{round(total, 2)}")
+        print(f"[OK] Total Cost: £{round(total, 2)}")
         return {"success": True, "total_spend": round(total, 2)}
     except Exception as e:
-        print(f"❌ Total cost error:\n{traceback.format_exc()}")
+        print(f"[ERROR] Total cost error:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -45,10 +45,10 @@ def get_cost_per_asset():
             for r in rows
         ]
         total = sum(d["price"] for d in data)
-        print(f"✅ Cost per asset: {len(data)} records, total £{round(total, 2)}")
+        print(f"[OK] Cost per asset: {len(data)} records, total £{round(total, 2)}")
         return {"success": True, "total": len(data), "total_spend": round(total, 2), "data": data}
     except Exception as e:
-        print(f"❌ Cost per asset error:\n{traceback.format_exc()}")
+        print(f"[ERROR] Cost per asset error:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -69,8 +69,8 @@ def get_cost_per_type():
             name = r.get("Asset_Type__r")
             name = name.get("Name", "Unknown") if isinstance(name, dict) else str(name or "Unknown")
             data.append({"type_name": name, "total_spend": round(_safe_float(r.get("expr0")), 2)})
-        print(f"✅ Cost per type: {len(data)} types")
+        print(f"[OK] Cost per type: {len(data)} types")
         return {"success": True, "total": len(data), "data": data}
     except Exception as e:
-        print(f"❌ Cost per type error:\n{traceback.format_exc()}")
+        print(f"[ERROR] Cost per type error:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
