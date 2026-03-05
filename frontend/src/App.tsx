@@ -25,6 +25,7 @@ import AssetDashboard from "./pages/AssetDashboad";
 import AssetCostPage from "./pages/AssetCost";
 import AssetAllocation from "./pages/Assetallocation";
 import VehicleCostSimple from "./pages/VehicleCostSimple"; // ✅ Added
+import ServiceMaintenanceCosts from "./pages/ServiceMaintenanceCosts"; // ✅ Service & Maintenance
 import MainLayout from "./components/layout/MainLayout";
 
 const queryClient = new QueryClient();
@@ -195,12 +196,12 @@ const App = () => (
               </ProtectedRoute>
             }
           />
-          {/* ✅ FIXED: /vehicle-cost now routes to VehicleCostSimple */}
+          {/* ✅ UPDATED: /vehicle-cost now shows Service & Maintenance Costs */}
           <Route
             path="/vehicle-cost"
             element={
               <ProtectedRoute>
-                <VehicleCostSimple />
+                <ServiceMaintenanceCosts />
               </ProtectedRoute>
             }
           />
