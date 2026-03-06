@@ -11,24 +11,33 @@
  */
 export const RESTRICTED_USERS: Record<string, string[]> = {
   'paul.mcgee@aspect.co.uk': ['Fire Safety'],
-  'martin.mackie@aspect.co.uk': ['Drainage & Plumbing'],
-  'james.parkinson@aspect.co.uk': ['HVAC & Electrical'],
-  'lee.merryweather@aspect.co.uk': ['Building Fabric'],
-  'marjan@aspect.co.uk': ['LDR'],
-  'peter.raynsford@aspect.co.uk': ['Drainage & Plumbing'],
+  'martin.mackie@aspect.co.uk': ['Drainage', 'Plumbing'],
+  'james.parkinson@aspect.co.uk': ['HVAC', 'Electrical', 'Gas'],
+  'lee.merryweather@aspect.co.uk': ['Roofing', 'Windows & Doors', 'General Builders', 'Multi'],
+  'marjan@aspect.co.uk': ['Leak Detection', 'Damp & Mould'],
+  'peter.raynsford@aspect.co.uk': ['Drainage', 'Plumbing'],
 };
 
 /**
  * Trade Group Picklist - All available trade groups for UI dropdowns
+ * Matches Salesforce Trade_Lookup__c picklist values
  */
 export const TRADE_GROUP_PICKLIST: string[] = [
+  'Utilities',
+  'Drainage',
+  'Key',
+  'Gas',
+  'Leak Detection',
+  'Electrical',
+  'Windows & Doors',
   'Fire Safety',
-  'LDR',
-  'HVAC & Electrical',
-  'Building Fabric',
-  'Environmental Services',
-  'Drainage & Plumbing',
-  'Key Account',
+  'Roofing',
+  'General Builders',
+  'Plumbing',
+  'Damp & Mould',
+  'Multi',
+  'Waste Clearance',
+  'HVAC',
 ];
 
 /**
@@ -88,96 +97,106 @@ export const getDefaultTradeGroup = (userEmail?: string): string | null => {
 };
 
 export const TRADE_MAPPING: Record<string, string> = {
-  // Fire Safety
+  // Direct mapping to Salesforce Trade_Lookup__c values (ordered by user's picklist)
+  'Utilities': 'Utilities',
+  'utilities': 'Utilities',
+  'Ultilities': 'Utilities',
+  'ultilities': 'Utilities',
+  'ULUITLITIES': 'Utilities',
+
+  'Drainage': 'Drainage',
+  'drainage': 'Drainage',
+
+  'Key': 'Key',
+  'key': 'Key',
+  'Key Account': 'Key',
+  'Key Accounts': 'Key',
+  'key account': 'Key',
+  'key acoount': 'Key',
+  'key accounts': 'Key',
+  'Insurance': 'Key',
+  'Manager for Insurance': 'Key',
+  'manager for insurance': 'Key',
+  'insurance': 'Key',
+
+  'Gas': 'Gas',
+  'gas': 'Gas',
+
+  'Leak Detection': 'Leak Detection',
+  'leak detection': 'Leak Detection',
+  'Leak detection': 'Leak Detection',
+  'Restoration': 'Leak Detection',
+
+  'Electrical': 'Electrical',
+  'electrical': 'Electrical',
+
+  'Windows & Doors': 'Windows & Doors',
+  'Windows and Doors': 'Windows & Doors',
+  'windows and doors': 'Windows & Doors',
+  'windows and dors': 'Windows & Doors',
+  'Windows': 'Windows & Doors',
+  'Doors': 'Windows & Doors',
+  'Carpenter': 'Windows & Doors',
+  'CARPTERNER': 'Windows & Doors',
+
   'Fire Safety': 'Fire Safety',
   'fire safety': 'Fire Safety',
 
-  // LDR (Leak Detection & Restoration)
-  'Leak Detection': 'LDR',
-  'Damp': 'LDR',
-  'Damp and Mould': 'LDR',
-  'Damp and mould': 'LDR',
-  'Damp mould': 'LDR',
-  'damp and mould': 'LDR',
-  'damp mould': 'LDR',
-  'Restoration': 'LDR',
+  'Roofing': 'Roofing',
+  'roofing': 'Roofing',
 
-  // Gas, HVAC & Electrical
-  'Gas': 'HVAC & Electrical',
-  'Electrical': 'HVAC & Electrical',
-  'Heating': 'HVAC & Electrical',
-  'Ventilation': 'HVAC & Electrical',
-  'Air Conditioning': 'HVAC & Electrical',
-  'HVAC': 'HVAC & Electrical',
-  'Utilities': 'HVAC & Electrical',
-  'utilities': 'HVAC & Electrical',
-  'Ultilities': 'HVAC & Electrical',
-  'ultilities': 'HVAC & Electrical',
-  'ULUITLITIES': 'HVAC & Electrical',
+  'General Builders': 'General Builders',
+  'general builders': 'General Builders',
+  'Building': 'General Builders',
+  'Building Fabric': 'General Builders',
+  'Building and Fabric': 'General Builders',
+  'Building and fabric': 'General Builders',
+  'buiding and fabric': 'General Builders',
+  'Building n fabric': 'General Builders',
+  'BUILDING n fabric': 'General Builders',
+  'building and fabric': 'General Builders',
+  'Decoration': 'General Builders',
+  'Bathroom Refurbishment': 'General Builders',
+  'Project Manager': 'General Builders',
+  'project manager': 'General Builders',
 
-  // Building Fabric
-  'Roofing': 'Building Fabric',
-  'Multi': 'Building Fabric',
-  'Decoration': 'Building Fabric',
-  'Bathroom Refurbishment': 'Building Fabric',
-  'Building': 'Building Fabric',
-  'Building Fabric': 'Building Fabric',
-  'Building and Fabric': 'Building Fabric',
-  'Building and fabric': 'Building Fabric',
-  'buiding and fabric': 'Building Fabric',
-  'Building n fabric': 'Building Fabric',
-  'BUILDING n fabric': 'Building Fabric',
-  'Windows and Doors': 'Building Fabric',
-  'windows and dors': 'Building Fabric',
-  'Windows': 'Building Fabric',
-  'Doors': 'Building Fabric',
-  'Carpenter': 'Building Fabric',
-  'CARPTERNER': 'Building Fabric',
-  'building and fabric': 'Building Fabric',
-  'Project Manager': 'Building Fabric',
-  'project manager': 'Building Fabric',
+  'Plumbing': 'Plumbing',
+  'plumbling': 'Plumbing',
+  'plumbing': 'Plumbing',
 
-  // Environmental Services
-  'Gardening': 'Environmental Services',
-  'Pest Control': 'Environmental Services',
-  'Rubbish Removal': 'Environmental Services',
-  'Pest Proofing': 'Environmental Services',
-  'Sanitisation & specialist cleaning': 'Environmental Services',
-  'Environmental Service': 'Environmental Services',
-  'Environmental service': 'Environmental Services',
-  'environmental service': 'Environmental Services',
-  'Environmental Services': 'Environmental Services',
-  'Environmental Science': 'Environmental Services',
-  'environmental science': 'Environmental Services',
+  'Damp & Mould': 'Damp & Mould',
+  'Damp and Mould': 'Damp & Mould',
+  'Damp': 'Damp & Mould',
+  'Damp and mould': 'Damp & Mould',
+  'damp and mould': 'Damp & Mould',
+  'damp mould': 'Damp & Mould',
 
-  // Drainage & Plumbing
-  'Drainage': 'Drainage & Plumbing',
-  'Plumbing': 'Drainage & Plumbing',
-  'plumbling': 'Drainage & Plumbing',
-  'drainage': 'Drainage & Plumbing',
+  'Multi': 'Multi',
+  'multi': 'Multi',
 
-  // Key Account (Primary trade group)
-  'Key Account': 'Key Account',
-  'Key Accounts': 'Key Account',
-  'key account': 'Key Account',
-  'key acoount': 'Key Account',
-  'key accounts': 'Key Account',
-  'key': 'Key Account',
-  'Key': 'Key Account',
-  'Insurance': 'Key Account',
-  'Manager for Insurance': 'Key Account',
-  'manager for insurance': 'Key Account',
-  'insurance': 'Key Account',
+  'Waste Clearance': 'Waste Clearance',
+  'waste clearance': 'Waste Clearance',
+  'Rubbish Removal': 'Waste Clearance',
+  'Gardening': 'Waste Clearance',
+  'Pest Control': 'Waste Clearance',
+  'Pest Proofing': 'Waste Clearance',
+  'Sanitisation & specialist cleaning': 'Waste Clearance',
+
+  'HVAC': 'HVAC',
+  'hvac': 'HVAC',
+  'Heating': 'HVAC',
+  'Ventilation': 'HVAC',
+  'Air Conditioning': 'HVAC',
 };
 
 /**
  * Get the parent trade group for a trade
  * Uses exact match, then case-insensitive, then substring matching
- * Returns 'Building Fabric' as fallback for unmapped trades (catch-all)
+ * Returns the trade value itself as fallback if not found in mapping
  */
 export const getTradeGroup = (trade: string): string => {
   if (!trade || trade === 'N/A' || trade.trim() === '') {
-    return 'Building Fabric'; // Default fallback
+    return 'N/A';
   }
 
   const tradeTrimmed = trade.trim();
@@ -202,8 +221,9 @@ export const getTradeGroup = (trade: string): string => {
     }
   }
 
-  // Fallback: return 'Building Fabric' for anything not in mapping
-  return 'Building Fabric';
+  // Fallback: return the actual trade value if not found in mapping
+  // This helps debug what values are actually in Salesforce
+  return tradeTrimmed;
 };
 
 /**

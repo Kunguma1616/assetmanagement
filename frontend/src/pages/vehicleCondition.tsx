@@ -9,6 +9,7 @@ interface SubmittedVCR {
   vanName: string;
   regNo: string;
   engineerName: string;
+  trade?: string;
   tradeGroup?: string;
   latestVcrDate: string;
   daysSince: number;
@@ -20,6 +21,7 @@ interface NotSubmittedVCR {
   vanName: string;
   regNo: string;
   engineerName: string;
+  trade?: string;
   tradeGroup?: string;
   latestVcrDate: string | null;
   daysSince: number | null;
@@ -438,24 +440,27 @@ const VehicleConditionDashboard: React.FC = () => {
 
   const { userTrade, userName, showsAllTrades, canViewTrade } = useUserTrade();
 
-  // ── Load engineer trades ───────────────────────────────────────────────────
+  // ── Load engineer trades from Salesforce ServiceResource ──────────────────
   const loadEngineerTrades = async () => {
     try {
-      const res = await fetch('/api/webfleet/engineers');
+      const res = await fetch('/api/vehicle-condition/engineers');
       if (!res.ok) throw new Error(`Failed to load engineers: ${res.status}`);
       const data = await res.json();
       const trades: Record<string, string> = {};
-      const engineersList = data.engineers || data.drivers || data.data || [];
-      engineersList.forEach((engineer: any, idx: number) => {
-        let name = (engineer.name || engineer.engineer || engineer.engineerName || '').trim();
-        const trade = (engineer.trade_group || engineer.tradeGroup || engineer.trade || '').trim();
+      const engineersList: Array<{ name: string; trade: string }> = data.engineers || [];
+      console.log(`[ENGINEERS_LOAD] Loaded ${engineersList.length} engineers from backend`);
+      engineersList.forEach((engineer, idx) => {
+        const name = (engineer.name || '').trim();
+        const trade = (engineer.trade || '').trim();
         if (name && trade) {
           const cleanName = name.split('(')[0].split('+')[0].trim();
           const mappedTrade = getTradeGroup(trade);
           trades[cleanName] = mappedTrade;
           trades[name] = mappedTrade;
+          if (idx < 5) console.log(`[ENGINEERS_LOAD] Engineer ${idx}: "${name}" -> Trade: "${trade}" -> Mapped: "${mappedTrade}"`);
         }
       });
+      console.log(`[ENGINEERS_LOAD] ✓ Processed trades for ${Object.keys(trades).length} engineer entries`);
       setEngineerTrades(trades);
     } catch (e) {
       console.error("Failed to load engineer trades:", e);
@@ -550,8 +555,15 @@ const VehicleConditionDashboard: React.FC = () => {
   const yesterdayStr = toDateStr(yesterdayDate);
   const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  const enrichWithTrades = <T extends { engineerName: string }>(items: T[]): (T & { tradeGroup?: string })[] => {
-    return items.map((item) => {
+  const enrichWithTrades = <T extends { engineerName: string; trade?: string }>(items: T[]): (T & { tradeGroup?: string })[] => {
+    return items.map((item, idx) => {
+      // Prefer the trade field from the API (Trade_Lookup__c from Salesforce directly)
+      if (item.trade && item.trade.trim() !== '') {
+        const mappedTrade = getTradeGroup(item.trade);
+        if (idx < 5) console.log(`[TRADE_ENRICH] Item ${idx}: Engineer="${item.engineerName}" Trade="${item.trade}" => "${mappedTrade}"`);
+        return { ...item, tradeGroup: mappedTrade };
+      }
+      // Fallback: name-based lookup from the engineers endpoint
       const fullName = item.engineerName;
       const cleanName = fullName.split('(')[0].split('+')[0].trim();
       const tradeGroup =
@@ -560,6 +572,7 @@ const VehicleConditionDashboard: React.FC = () => {
         engineerTrades[fullName] ||
         Object.entries(engineerTrades).find(([key]) => key.toLowerCase() === cleanName.toLowerCase())?.[1] ||
         'N/A';
+      if (idx < 5) console.log(`[TRADE_ENRICH_FALLBACK] Item ${idx}: Engineer="${item.engineerName}" => "${tradeGroup}"`);
       return { ...item, tradeGroup };
     });
   };

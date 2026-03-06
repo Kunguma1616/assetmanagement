@@ -186,11 +186,13 @@ def get_compliance_dashboard_all_allocated():
             SELECT Vehicle__c,
                    Vehicle__r.Name,
                    Vehicle__r.Reg_No__c,
-                   Service_Resource__r.Name
+                   Service_Resource__r.Name,
+                   Service_Resource__r.Trade_Lookup__c,
+                   Start_date__c
             FROM Vehicle_Allocation__c
             WHERE Start_date__c <= TODAY
               AND (End_date__c = NULL OR End_date__c >= TODAY)
-            ORDER BY Vehicle__c
+            ORDER BY Vehicle__c, Start_date__c DESC
         """
         print(f"[VCR_DASHBOARD] Fetching allocated vehicles...")
         allocated_vehicles = sf_service.execute_soql(allocation_query)
@@ -205,13 +207,16 @@ def get_compliance_dashboard_all_allocated():
                 "notSubmitted": []
             }
         
-        # De-duplicate vehicles (keep first allocation for each vehicle)
+        # De-duplicate vehicles (keep LATEST allocation for each vehicle)
         seen_vehicles = {}
         total_allocations = len(allocated_vehicles)
         for allocation in allocated_vehicles:
             vehicle_id = allocation["Vehicle__c"]
             if vehicle_id not in seen_vehicles:
                 seen_vehicles[vehicle_id] = allocation
+                trade_val = allocation.get("Service_Resource__r", {}).get("Trade_Lookup__c", "")
+                eng_name = allocation.get("Service_Resource__r", {}).get("Name", "")
+                print(f"[VCR_DASHBOARD] [TRADE] Vehicle {allocation.get('Vehicle__r', {}).get('Name', 'Unknown')}: Engineer={eng_name}, Trade={trade_val}")
         
         allocated_vehicles = list(seen_vehicles.values())
         total_allocated = len(allocated_vehicles)
@@ -249,19 +254,21 @@ def get_compliance_dashboard_all_allocated():
         not_submitted_list = []
         
         for vehicle in allocated_vehicles:
-            vehicle_id   = vehicle["Vehicle__c"]
-            vehicle_name = (vehicle.get("Vehicle__r") or {}).get("Name", "Unknown")
-            vehicle_reg  = (vehicle.get("Vehicle__r") or {}).get("Reg_No__c", "")
-            engineer_name = (vehicle.get("Service_Resource__r") or {}).get("Name", "Unassigned")
-            
+            vehicle_id    = vehicle["Vehicle__c"]
+            vehicle_name  = (vehicle.get("Vehicle__r") or {}).get("Name", "Unknown")
+            vehicle_reg   = (vehicle.get("Vehicle__r") or {}).get("Reg_No__c", "")
+            sr            = vehicle.get("Service_Resource__r") or {}
+            engineer_name = sr.get("Name", "Unassigned")
+            trade         = sr.get("Trade_Lookup__c") or ""
+
             if vehicle_id in latest_vcr_map:
                 latest_vcr   = latest_vcr_map[vehicle_id]
                 vcr_date_str = latest_vcr.get("CreatedDate")
                 vcr_date     = parse_salesforce_datetime(vcr_date_str)
-                
+
                 if vcr_date:
                     days_since = (today - vcr_date).days
-                    
+
                     if days_since <= 14:
                         print(f"[VCR_DASHBOARD] [OK] {vehicle_name}: SUBMITTED ({days_since} days ago)")
                         submitted_list.append({
@@ -269,6 +276,7 @@ def get_compliance_dashboard_all_allocated():
                             "vanName":       vehicle_name,
                             "regNo":         vehicle_reg or "N/A",
                             "engineerName":  engineer_name,
+                            "trade":         trade,
                             "latestVcrDate": vcr_date.date().isoformat(),
                             "daysSince":     days_since,
                             "status":        "Submitted"
@@ -280,6 +288,7 @@ def get_compliance_dashboard_all_allocated():
                             "vanName":       vehicle_name,
                             "regNo":         vehicle_reg or "N/A",
                             "engineerName":  engineer_name,
+                            "trade":         trade,
                             "latestVcrDate": vcr_date.date().isoformat(),
                             "daysSince":     days_since,
                             "status":        "Overdue"
@@ -291,6 +300,7 @@ def get_compliance_dashboard_all_allocated():
                     "vanName":       vehicle_name,
                     "regNo":         vehicle_reg or "N/A",
                     "engineerName":  engineer_name,
+                    "trade":         trade,
                     "latestVcrDate": None,
                     "daysSince":     None,
                     "status":        "Missing"
@@ -674,6 +684,38 @@ async def ai_analyse_vcr_images(form_id: str):
         print(f"[VCR_AI] [ERROR] {e}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/engineers")
+def get_engineers_with_trades():
+    """
+    Get all active engineers with their Trade_Lookup__c from Salesforce ServiceResource.
+    Uses the correct SOQL to return only Engineer Partner Community users with a trade assigned.
+    """
+    try:
+        query = """
+            SELECT Name, Trade_Lookup__c
+            FROM ServiceResource
+            WHERE Is_User_Active__c = true
+              AND IsActive = true
+              AND Account.Chumley_Test_Record__c = false
+              AND FSM__c = false
+              AND RelatedRecord.Profile_Name__c = 'Engineer Partner Community'
+              AND Trade_Lookup__c != null
+            GROUP BY Name, Trade_Lookup__c
+        """
+        results = sf_service.execute_soql(query)
+        if not results:
+            return {"engineers": []}
+        engineers = [
+            {"name": r["Name"], "trade": r.get("Trade_Lookup__c", "")}
+            for r in results
+        ]
+        print(f"[ENGINEERS] ✓ Returning {len(engineers)} engineer-trade pairs from Salesforce")
+        return {"engineers": engineers}
+    except Exception as e:
+        print(f"[ENGINEERS] [ERROR] {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
