@@ -191,7 +191,9 @@ def get_compliance_dashboard_all_allocated():
             FROM Vehicle_Allocation__c
             WHERE Start_date__c <= TODAY
               AND (End_date__c = NULL OR End_date__c >= TODAY)
-            ORDER BY Vehicle__c
+              AND Service_Resource__r.Name NOT LIKE '%Test%'
+              AND Service_Resource__r.Name NOT LIKE '%Demo%'
+            ORDER BY Vehicle__c, Start_date__c DESC
         """
         print(f"[VCR_DASHBOARD] Fetching allocated vehicles...")
         allocated_vehicles = sf_service.execute_soql(allocation_query)
