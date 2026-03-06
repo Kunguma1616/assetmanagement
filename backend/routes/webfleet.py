@@ -267,6 +267,18 @@ def get_engineers_with_scores():
             ORDER BY Name ASC
         """
         
+        if sf.mock_mode or not sf.sf:
+            print("[WARN] Salesforce not connected - returning empty engineer list")
+            return {
+                "total": 0,
+                "total_salesforce_engineers": 0,
+                "engineers_in_webfleet": 0,
+                "with_scores": 0,
+                "without_scores": 0,
+                "last_cache_update": _cache.get('last_updated').isoformat() if _cache.get('last_updated') else None,
+                "engineers": []
+            }
+
         result = sf.sf.query(engineer_query)
         all_engineers = result.get('records', [])
         
