@@ -703,7 +703,6 @@ def get_engineers_with_trades():
               AND RelatedRecord.Profile_Name__c = 'Engineer Partner Community'
               AND Trade_Lookup__c != null
             GROUP BY Name, Trade_Lookup__c
-            ORDER BY Name
         """
         results = sf_service.execute_soql(query)
         if not results:
