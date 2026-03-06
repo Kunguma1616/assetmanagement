@@ -595,7 +595,7 @@ const VehicleConditionDashboard: React.FC = () => {
 
   const filteredNotSubmitted = enrichedNotSubmitted.filter(v => !actualTradeFilter || v.tradeGroup === actualTradeFilter);
   const isFiltered           = !!(filterMode || filterDate || actualTradeFilter);
-  const totalAllocatedForUser = !showsAllTrades() ? (filteredSubmitted.length + filteredNotSubmitted.length) : (dashboard?.totalAllocated || 0);
+  const totalAllocatedForUser = (actualTradeFilter || !showsAllTrades()) ? (filteredSubmitted.length + filteredNotSubmitted.length) : (dashboard?.totalAllocated || 0);
   const displaySubmittedCount    = filteredSubmitted.length;
   const displayNotSubmittedCount = filteredNotSubmitted.length;
 
