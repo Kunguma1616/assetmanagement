@@ -689,7 +689,8 @@ async def ai_analyse_vcr_images(form_id: str):
 def get_engineers_with_trades():
     """
     Fetch active engineers with their Trade_Lookup__c from Salesforce.
-    Filters out test/demo engineers to show only real engineers.
+    Uses GROUP BY to deduplicate engineers by name and trade.
+    Filters out test/demo engineers in Python.
     """
     try:
         query = """
@@ -701,6 +702,7 @@ def get_engineers_with_trades():
               AND FSM__c = false
               AND RelatedRecord.Profile_Name__c = 'Engineer Partner Community'
               AND Trade_Lookup__c != null
+            GROUP BY Name, Trade_Lookup__c
             ORDER BY Name
         """
         results = sf_service.execute_soql(query)
@@ -717,7 +719,7 @@ def get_engineers_with_trades():
                     "trade": r.get("Trade_Lookup__c", "")
                 })
         
-        print(f"[ENGINEERS] ✓ Returning {len(engineers)} active engineer-trade pairs from Salesforce")
+        print(f"[ENGINEERS] ✓ Returning {len(engineers)} active engineer-trade pairs from Salesforce (deduplicated by Name, Trade_Lookup__c)")
         for eng in engineers[:5]:
             print(f"[ENGINEERS] - {eng['name']}: {eng['trade']}")
         return {"engineers": engineers}
