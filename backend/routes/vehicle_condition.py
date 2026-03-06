@@ -699,7 +699,7 @@ def get_engineers_with_trades():
             WHERE Is_User_Active__c = true
               AND IsActive = true
               AND Account.Chumley_Test_Record__c = false
-              AND FSM__c = false
+              
               AND RelatedRecord.Profile_Name__c = 'Engineer Partner Community'
               AND Trade_Lookup__c != null
             GROUP BY Name, Trade_Lookup__c
