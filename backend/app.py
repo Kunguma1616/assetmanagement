@@ -25,7 +25,7 @@ def safe_import(import_fn, name):
     except Exception as e:
         print(f"[FATAL] Failed to import {name}: {e}", file=sys.stderr)
         traceback.print_exc()
-        sys.exit(1)  # Crash loudly so the full error appears in logs
+        sys.exit(1)
 
 # ─── IMPORTS ──────────────────────────────────────────────────────────────────
 def _import_dashboard():
@@ -65,8 +65,9 @@ def _import_upload():
     from routes.uploadvehicle import router as r
     return r
 def _import_cost():
-    from routes.cost import router as r
-    return r
+    # ✅ FIXED: also import leases_router
+    from routes.cost import router as r, leases_router as lr
+    return r, lr
 def _import_vehicle_condition():
     from routes.vehicle_condition import router as r
     return r
@@ -87,7 +88,8 @@ ai_router                = safe_import(_import_ai,                 "routes.ai")
 chat_router              = safe_import(_import_chat,               "routes.chat")
 auth_router              = safe_import(_import_auth,               "routes.auth")
 upload_router            = safe_import(_import_upload,             "routes.uploadvehicle")
-cost_router              = safe_import(_import_cost,               "routes.cost")
+cost_tuple               = safe_import(_import_cost,               "routes.cost")
+cost_router, leases_router = cost_tuple  # ✅ unpack both routers
 vehicle_condition_router = safe_import(_import_vehicle_condition,  "routes.vehicle_condition")
 register_asset_router    = safe_import(_import_register_asset,     "routes.register_asset")
 
@@ -132,6 +134,7 @@ app.include_router(upload_router)
 app.include_router(auth_router)
 app.include_router(vehicle_condition_router)
 app.include_router(cost_router)
+app.include_router(leases_router)   # ✅ FIXED: registers /api/leases/trade-groups
 app.include_router(register_asset_router)
 
 
@@ -209,6 +212,9 @@ async def serve_root():
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
+    # ✅ FIXED: never intercept API routes with the frontend catch-all
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail=f"API route not found: /{full_path}")
     file_path = os.path.join(static_dir, full_path)
     if full_path and os.path.isfile(file_path):
         return FileResponse(file_path)
