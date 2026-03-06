@@ -191,8 +191,6 @@ def get_compliance_dashboard_all_allocated():
             FROM Vehicle_Allocation__c
             WHERE Start_date__c <= TODAY
               AND (End_date__c = NULL OR End_date__c >= TODAY)
-              AND Service_Resource__r.Name NOT LIKE '%Test%'
-              AND Service_Resource__r.Name NOT LIKE '%Demo%'
             ORDER BY Vehicle__c, Start_date__c DESC
         """
         print(f"[VCR_DASHBOARD] Fetching allocated vehicles...")
@@ -208,17 +206,24 @@ def get_compliance_dashboard_all_allocated():
                 "notSubmitted": []
             }
         
+        # Filter out test/demo engineers in Python
+        filtered_allocations = []
+        for allocation in allocated_vehicles:
+            eng_name = (allocation.get("Service_Resource__r") or {}).get("Name", "").lower()
+            if "test" not in eng_name and "demo" not in eng_name:
+                filtered_allocations.append(allocation)
+        
         # De-duplicate vehicles (keep first allocation for each vehicle)
         seen_vehicles = {}
         total_allocations = len(allocated_vehicles)
-        for allocation in allocated_vehicles:
+        for allocation in filtered_allocations:
             vehicle_id = allocation["Vehicle__c"]
             if vehicle_id not in seen_vehicles:
                 seen_vehicles[vehicle_id] = allocation
         
         allocated_vehicles = list(seen_vehicles.values())
         total_allocated = len(allocated_vehicles)
-        print(f"[VCR_DASHBOARD] ✓ Found {total_allocated} allocated vehicles (deduplicated from {total_allocations} allocations)")
+        print(f"[VCR_DASHBOARD] ✓ Found {total_allocated} allocated vehicles (deduplicated from {total_allocations} allocations, {len(filtered_allocations)} after filtering test engineers)")
         
         vehicle_ids = [v["Vehicle__c"] for v in allocated_vehicles]
         vehicle_ids_str = "', '".join(vehicle_ids)
@@ -696,17 +701,22 @@ def get_engineers_with_trades():
               AND FSM__c = false
               AND RelatedRecord.Profile_Name__c = 'Engineer Partner Community'
               AND Trade_Lookup__c != null
-              AND Name NOT LIKE '%Test%'
-              AND Name NOT LIKE '%Demo%'
             ORDER BY Name
         """
         results = sf_service.execute_soql(query)
         if not results:
             return {"engineers": []}
-        engineers = [
-            {"name": r["Name"], "trade": r.get("Trade_Lookup__c", "")}
-            for r in results
-        ]
+        
+        # Filter out test/demo engineers in Python (Salesforce SOQL doesn't support NOT LIKE)
+        engineers = []
+        for r in results:
+            name = (r.get("Name") or "").lower()
+            if "test" not in name and "demo" not in name:
+                engineers.append({
+                    "name": r["Name"],
+                    "trade": r.get("Trade_Lookup__c", "")
+                })
+        
         print(f"[ENGINEERS] ✓ Returning {len(engineers)} active engineer-trade pairs from Salesforce")
         for eng in engineers[:5]:
             print(f"[ENGINEERS] - {eng['name']}: {eng['trade']}")
