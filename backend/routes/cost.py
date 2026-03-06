@@ -30,63 +30,78 @@ router = APIRouter(prefix="/api/cost", tags=["cost"])
 # ✅ NEW: separate router for /api/leases routes (missing trade-groups fix)
 leases_router = APIRouter(prefix="/api/leases", tags=["leases"])
 
-# ─── EXCEL FILE PATH (works both locally and in GCP) ──────────────────────────
+# ─── EXCEL FILE: download from GitHub at runtime (no Dockerfile changes needed) ───
+import tempfile
+import urllib.request
+
+GITHUB_EXCEL_URL = "https://raw.githubusercontent.com/Kunguma1616/assetmanagement/main/HSBC_Leases.xlsx"
+_cached_excel_path = None
+
 def get_excel_path() -> str | None:
-    """Find HSBC_Leases.xlsx — works on local Windows dev and GCP Docker container."""
+    """
+    Download HSBC_Leases.xlsx from GitHub repo at runtime.
+    Cached after first download so it only fetches once per container lifetime.
+    No Dockerfile changes needed.
+    """
+    global _cached_excel_path
+
+    # Return cached path if already downloaded
+    if _cached_excel_path and Path(_cached_excel_path).is_file():
+        return _cached_excel_path
+
+    # Check local filesystem first (works on local dev)
     base_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-
-    candidates = [
-        Path("/app/HSBC_Leases.xlsx"),                        # ✅ GCP Docker (copied by Dockerfile)
-        base_dir / "HSBC_Leases.xlsx",                        # routes/ folder
-        base_dir.parent / "HSBC_Leases.xlsx",                 # backend/ folder
-        base_dir.parent.parent / "HSBC_Leases.xlsx",          # project root
-        Path(os.environ.get("HSBC_EXCEL_PATH", "")),          # env var override
+    local_candidates = [
+        base_dir.parent / "HSBC_Leases.xlsx",
+        base_dir.parent.parent / "HSBC_Leases.xlsx",
+        base_dir / "HSBC_Leases.xlsx",
     ]
+    for p in local_candidates:
+        if p.is_file():
+            print(f"✅ Found Excel locally at: {p.resolve()}")
+            _cached_excel_path = str(p.resolve())
+            return _cached_excel_path
 
-    for p in candidates:
-        try:
-            if p and p.exists():
-                print(f"✅ Found Excel file at: {p.resolve()}")
-                return str(p.resolve())
-        except Exception:
-            continue
+    # Download from GitHub
+    try:
+        print(f"⬇️  Downloading HSBC_Leases.xlsx from GitHub...")
+        tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+        urllib.request.urlretrieve(GITHUB_EXCEL_URL, tmp.name)
+        print(f"✅ Downloaded to: {tmp.name}")
+        _cached_excel_path = tmp.name
+        return _cached_excel_path
+    except Exception as e:
+        print(f"❌ Failed to download Excel from GitHub: {e}")
+        return None
 
-    print("❌ HSBC_Leases.xlsx not found in any of these locations:")
-    for p in candidates:
-        print(f"   - {p}")
-    return None
-
+# alias
+get_csv_path = get_excel_path
 
 # Keep legacy EXCEL_FILE for load_lease_data()
-EXCEL_FILE = get_excel_path() or ""
+EXCEL_FILE = ""  # don't call at import time — download on first request
 
 
 def load_lease_data():
-    """Load lease data from Excel file"""
+    """Load lease data from HSBC_Leases.xlsx (in repo root → /app/HSBC_Leases.xlsx in GCP)"""
     path = get_excel_path()
-    if not path or not os.path.exists(path):
-        print(f"❌ Excel file not found: {path}")
+    if not path:
+        print("❌ HSBC_Leases.xlsx not found")
         return []
-
     try:
         wb = openpyxl.load_workbook(path, data_only=True)
         ws = wb.active
-
         headers = [ws.cell(2, i).value for i in range(1, ws.max_column + 1) if ws.cell(2, i).value]
-
         leases = []
         for row_idx in range(3, ws.max_row + 1):
             row_data = {}
             for col_idx, header in enumerate(headers, 1):
-                cell_value = ws.cell(row_idx, col_idx).value
-                row_data[header] = cell_value
-
+                row_data[header] = ws.cell(row_idx, col_idx).value
             if row_data.get('Identifier ') or row_data.get('Registration Doc '):
                 leases.append(row_data)
-
+        print(f"✅ Loaded {len(leases)} leases from Excel")
         return leases
     except Exception as e:
-        print(f"❌ Error loading Excel file: {e}")
+        print(f"❌ Error loading Excel: {e}")
         return []
 
 
@@ -690,14 +705,15 @@ def get_all_csv_leases():
                 "success": False,
                 "total": 0,
                 "rows": [],
-                "error": "Excel file HSBC_Leases.xlsx not found. Make sure it is in the project root or /app/ directory."
+                "error": "HSBC_Leases.xlsx not found. It should be in the repo root (copied to /app/ in GCP)."
             }
 
         try:
             from excel_handler import read_and_clean_hsbc_leases
             df = read_and_clean_hsbc_leases(excel_file, verbose=False)
         except ImportError:
-            return {"success": False, "total": 0, "rows": [], "error": "excel_handler not available"}
+            # Fallback: read Excel directly with pandas
+            df = pd.read_excel(excel_file)
 
         if 'Identifier' in df.columns:
             df['Identifier'] = df['Identifier'].ffill()
