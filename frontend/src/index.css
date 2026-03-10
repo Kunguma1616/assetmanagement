@@ -8,7 +8,7 @@
 /* --- MONT FONT FACES --- */
 @font-face {
     font-family: "MontRegular";
-    src: url("/fonts/MontRegular/MontRegular.woff2") format("woff2"), url("/fonts/MontRegular/MontRegular.woff") format("woff");
+    src: url("./fonts/MontRegular/MontRegular.woff2") format("woff2"), url("./fonts/MontRegular/MontRegular.woff") format("woff");
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -16,7 +16,7 @@
 
 @font-face {
     font-family: "MontLight";
-    src: url("/fonts/MontLight/MontLight.woff2") format("woff2"), url("/fonts/MontLight/MontLight.woff") format("woff");
+    src: url("./fonts/MontLight/MontLight.woff2") format("woff2"), url("./fonts/MontLight/MontLight.woff") format("woff");
     font-weight: 300;
     font-style: normal;
     font-display: swap;
@@ -24,7 +24,7 @@
 
 @font-face {
     font-family: "MontSemiBold";
-    src: url("/fonts/MontSemiBold/MontSemiBold.woff2") format("woff2"), url("/fonts/MontSemiBold/MontSemiBold.woff") format("woff");
+    src: url("./fonts/MontSemiBold/MontSemiBold.woff2") format("woff2"), url("./fonts/MontSemiBold/MontSemiBold.woff") format("woff");
     font-weight: 600;
     font-style: normal;
     font-display: swap;
@@ -32,7 +32,7 @@
 
 @font-face {
     font-family: "MontBold";
-    src: url("/fonts/MontBold/MontBold.woff2") format("woff2"), url("/fonts/MontBold/MontBold.woff") format("woff");
+    src: url("./fonts/MontBold/MontBold.woff2") format("woff2"), url("./fonts/MontBold/MontBold.woff") format("woff");
     font-weight: 700;
     font-style: normal;
     font-display: swap;
@@ -40,7 +40,7 @@
 
 @font-face {
     font-family: "MontBlack";
-    src: url("/fonts/MontBlack/MontBlack.woff2") format("woff2"), url("/fonts/MontBlack/MontBlack.woff") format("woff");
+    src: url("./fonts/MontBlack/MontBlack.woff2") format("woff2"), url("./fonts/MontBlack/MontBlack.woff") format("woff");
     font-weight: 900;
     font-style: normal;
     font-display: swap;
@@ -48,7 +48,7 @@
 
 @font-face {
     font-family: "MontHeavy";
-    src: url("/fonts/MontHeavy/MontHeavy.woff2") format("woff2"), url("/fonts/MontHeavy/MontHeavy.woff") format("woff");
+    src: url("./fonts/MontHeavy/MontHeavy.woff2") format("woff2"), url("./fonts/MontHeavy/MontHeavy.woff") format("woff");
     font-weight: 800;
     font-style: normal;
     font-display: swap;
