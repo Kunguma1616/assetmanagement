@@ -537,13 +537,12 @@ export default function UploadAsset() {
                       <SelectValue placeholder="Select trade group" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Office">Office</SelectItem>
-                      <SelectItem value="Leak Detection, Damp & Restoration">Leak Detection, Damp & Restoration</SelectItem>
-                      <SelectItem value="Drainage & Plumbing">Drainage & Plumbing</SelectItem>
-                      <SelectItem value="HVAC & Electrical">HVAC & Electrical</SelectItem>
                       <SelectItem value="Building Fabric">Building Fabric</SelectItem>
-                      <SelectItem value="Fire Safety">Fire Safety</SelectItem>
+                      <SelectItem value="Drainage & Plumbing">Drainage & Plumbing</SelectItem>
                       <SelectItem value="Environmental Services">Environmental Services</SelectItem>
+                      <SelectItem value="Fire Safety">Fire Safety</SelectItem>
+                      <SelectItem value="Gas, HVAC & Electrical">Gas, HVAC & Electrical</SelectItem>
+                      <SelectItem value="LDR">LDR</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

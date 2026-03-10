@@ -185,7 +185,7 @@ export default function AssetsGallery() {
           </button>
           <div className="flex justify-between items-start flex-wrap gap-3">
             <div>
-              <h1 className="text-3xl font-bold" style={{ color: '#1A1D23' }}>Assets Gallery</h1>
+              <h1 className="text-3xl font-bold" style={{ color: '#1A1D23' }}> Chumely Assets Gallery</h1>
               <p className="mt-1 text-sm" style={{ color: '#646F86' }}>View uploaded vehicles and registered assets</p>
             </div>
             <div className="flex gap-2">

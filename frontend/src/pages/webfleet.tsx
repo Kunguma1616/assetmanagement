@@ -389,7 +389,7 @@ const Webfleet: React.FC = () => {
                 </span>
               </div>
               <h1 style={{ fontSize: 30, fontWeight: 900, color: C.white, margin: '0 0 5px', letterSpacing: '-0.03em', fontFamily: FONT }}>
-                Engineer Rankings
+                Chumely Engineer Rankings
               </h1>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.58)', margin: 0, fontWeight: 500, fontFamily: FONT }}>
@@ -531,6 +531,93 @@ const Webfleet: React.FC = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TRADE GROUP BREAKDOWN ─────────────────────────────────────────── */}
+        {engineers.length > 0 && (
+          <div style={{
+            background: C.white,
+            borderRadius: 16,
+            border: `1px solid ${C.borderSubtle}`,
+            padding: '24px 28px',
+            marginBottom: 28,
+            boxShadow: '0 2px 10px rgba(39,84,157,0.07)',
+          }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: C.title, margin: '0 0 20px', fontFamily: FONT }}>
+              Engineers by Trade Group
+            </h3>
+            
+            {/* Trade Group Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+              {(() => {
+                // Calculate engineer counts by trade group
+                const tradeGroupCounts: Record<string, number> = {};
+                engineers.forEach(eng => {
+                  const tg = eng.trade_group || 'Others';
+                  tradeGroupCounts[tg] = (tradeGroupCounts[tg] || 0) + 1;
+                });
+                
+                // Define trade group colors
+                const tradeGroupColors: Record<string, { bg: string; border: string; text: string }> = {
+                  'Building Fabric': { bg: '#E0E7FF', border: '#4F46E5', text: '#4F46E5' },
+                  'Drainage & Plumbing': { bg: '#D1FAE5', border: '#059669', text: '#059669' },
+                  'Environmental Services': { bg: '#FEF3C7', border: '#D97706', text: '#D97706' },
+                  'Fire Safety': { bg: '#FEE2E2', border: '#DC2626', text: '#DC2626' },
+                  'Gas, HVAC & Electrical': { bg: '#DBEAFE', border: '#0284C7', text: '#0284C7' },
+                  'LDR': { bg: '#F3E8FF', border: '#7C3AED', text: '#7C3AED' },
+                  'Others': { bg: '#F3F4F6', border: '#6B7280', text: '#6B7280' },
+                };
+                
+                // Sort trade groups by count (descending) but keep Others last
+                const sorted = Object.entries(tradeGroupCounts)
+                  .filter(([tg]) => tg !== 'Others')
+                  .sort((a, b) => b[1] - a[1])
+                  .concat(Object.entries(tradeGroupCounts).filter(([tg]) => tg === 'Others'));
+                
+                return sorted.map(([tradeGroup, count]) => {
+                  const colors = tradeGroupColors[tradeGroup] || tradeGroupColors['Others'];
+                  const percentage = ((count / engineers.length) * 100).toFixed(0);
+                  return (
+                    <div
+                      key={tradeGroup}
+                      style={{
+                        background: colors.bg,
+                        border: `1.5px solid ${colors.border}`,
+                        borderRadius: 12,
+                        padding: '16px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
+                        (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 16px ${colors.border}40`;
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                        (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                      }}
+                      onClick={() => {
+                        setSelectedTradeGroup(tradeGroup === selectedTradeGroup ? '' : tradeGroup);
+                      }}
+                    >
+                      <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: C.gray, margin: '0 0 8px', fontFamily: FONT }}>
+                        {tradeGroup}
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+                        <span style={{ fontSize: 28, fontWeight: 900, color: colors.text, fontFamily: FONT }}>
+                          {count}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: 11, color: colors.text, margin: 0, fontWeight: 600, fontFamily: FONT }}>
+                        {percentage}% of fleet
+                      </p>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}

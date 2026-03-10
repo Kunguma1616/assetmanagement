@@ -617,7 +617,7 @@ export default function Dashboard() {
                 Asset Management
               </p>
               <h1 style={{ fontSize: 20, fontWeight: 900, color: C.white, margin: 0, letterSpacing: '-0.02em', fontFamily: FONT }}>
-                Asset Dashboard
+                Chumely Asset Dashboard
               </h1>
               <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', margin: '2px 0 0', fontWeight: 500, fontFamily: FONT }}>
                 Enterprise Asset Intelligence

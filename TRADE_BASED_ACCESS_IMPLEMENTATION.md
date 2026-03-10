@@ -21,13 +21,14 @@ This implementation adds trade-based access restrictions to the Webfleet (Engine
 ```
 
 ### Trade Mapping
-From `auth.py`, the allowed users are:
+From `auth.py`, the allowed users and their trade categories are:
 - **No restriction (trade: null)**: Alex Bacon, Aman Bisht, Amandeep Singh, etc.
-- **LDR**: Peter Raynsford, Marjan Kola
 - **Building Fabric**: Lee Merryweather
-- **HVAC & Electrical**: James Parkinson
-- **Drainage & Plumbing**: Martin Mackie
+- **Drainage & Plumbing**: Martin Mackie, Peter Raynsford
+- **Environmental Services**: (To be assigned)
 - **Fire Safety**: Paul McGee
+- **Gas, HVAC & Electrical**: James Parkinson
+- **LDR**: Marjan Kola
 
 ---
 
@@ -212,7 +213,8 @@ User data is stored in `sessionStorage` (not `localStorage`):
 
 1. **Trade Values**:
    - `"ALL"` or `null` = No restriction (user sees all data)
-   - Any other string (e.g., "LDR", "HVAC & Electrical") = Restricted to that trade only
+   - Any other string (e.g., "LDR", "Gas, HVAC & Electrical", "Building Fabric") = Restricted to that trade only
+   - Valid trade categories: Building Fabric, Drainage & Plumbing, Environmental Services, Fire Safety, Gas HVAC & Electrical, LDR
 
 2. **Filtering Strategy**:
    - Data is filtered on the frontend (no API changes required)

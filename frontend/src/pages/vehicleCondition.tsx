@@ -206,6 +206,7 @@ interface TableColumn {
   key: string;
   label: string;
   width?: string;
+  sortable?: boolean;
 }
 
 interface TableProps {
@@ -214,9 +215,12 @@ interface TableProps {
   columns: TableColumn[];
   emptyMessage: string;
   onVehicleClick?: (vanName: string) => void;
+  sortKey?: string;
+  sortOrder?: 'asc' | 'desc';
+  onSort?: (key: string) => void;
 }
 
-const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVehicleClick }) => {
+const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVehicleClick, sortKey, sortOrder, onSort }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Submitted":  return { bg: C.surface.successSubtle, color: C.success.default };
@@ -225,6 +229,33 @@ const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVeh
       default:           return { bg: C.gray.negative,         color: C.gray.body };
     }
   };
+
+  // Sort data
+  const sortedData = [...data].sort((a, b) => {
+    if (!sortKey) return 0;
+    
+    const aVal = a[sortKey as keyof typeof a];
+    const bVal = b[sortKey as keyof typeof b];
+    
+    // Handle null/undefined
+    if (!aVal && bVal) return sortOrder === 'asc' ? -1 : 1;
+    if (aVal && !bVal) return sortOrder === 'asc' ? 1 : -1;
+    if (!aVal && !bVal) return 0;
+    
+    // Numeric comparison
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    }
+    
+    // String comparison
+    const aStr = String(aVal).toLowerCase();
+    const bStr = String(bVal).toLowerCase();
+    if (sortOrder === 'asc') {
+      return aStr.localeCompare(bStr);
+    } else {
+      return bStr.localeCompare(aStr);
+    }
+  });
 
   return (
     <div style={{ marginBottom: "32px" }}>
@@ -237,21 +268,50 @@ const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVeh
           <thead>
             <tr style={{ borderBottom: `2px solid ${C.border.subtle}`, background: C.gray.negative }}>
               {columns.map((col) => (
-                <th key={col.key} style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: C.text.body, width: col.width }}>
-                  {col.label}
+                <th 
+                  key={col.key} 
+                  onClick={() => col.sortable && onSort?.(col.key)}
+                  style={{ 
+                    padding: "12px 16px", 
+                    textAlign: "left", 
+                    fontWeight: 600, 
+                    color: C.text.body, 
+                    width: col.width,
+                    cursor: col.sortable ? 'pointer' : 'default',
+                    userSelect: 'none',
+                    background: sortKey === col.key ? `${C.primary.default}10` : 'inherit',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (col.sortable) {
+                      (e.currentTarget as HTMLElement).style.background = `${C.primary.default}15`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = sortKey === col.key ? `${C.primary.default}10` : 'inherit';
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {col.label}
+                    {col.sortable && sortKey === col.key && (
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: C.primary.default }}>
+                        {sortOrder === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {data.length === 0 ? (
+            {sortedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} style={{ padding: "60px 16px", textAlign: "center", color: C.gray.caption, fontSize: "14px", fontWeight: 500 }}>
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              data.map((row, idx) => (
+              sortedData.map((row, idx) => (
                 <tr
                   key={idx}
                   style={{ borderBottom: `1px solid ${C.border.subtle}`, transition: "background 0.2s" }}
@@ -438,6 +498,24 @@ const VehicleConditionDashboard: React.FC = () => {
   const [aiLoading, setAiLoading]             = useState(false);
   const [aiError, setAiError]                 = useState("");
 
+  // ── Sort State ─────────────────────────────────────────────────────────────
+  const [submittedSort, setSubmittedSort]     = useState<{ key: string; order: 'asc' | 'desc' }>({ key: 'latestVcrDate', order: 'desc' });
+  const [notSubmittedSort, setNotSubmittedSort] = useState<{ key: string; order: 'asc' | 'desc' }>({ key: 'vanName', order: 'asc' });
+
+  const handleSubmittedSort = (key: string) => {
+    setSubmittedSort(prev => ({
+      key,
+      order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const handleNotSubmittedSort = (key: string) => {
+    setNotSubmittedSort(prev => ({
+      key,
+      order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
   const { userTrade, userName, showsAllTrades, canViewTrade } = useUserTrade();
 
   // ── Load engineer trades from Salesforce ServiceResource ──────────────────
@@ -612,21 +690,21 @@ const VehicleConditionDashboard: React.FC = () => {
     filterMode === '7days' ? 'Not submitted in 7 days' : 'Overdue or never submitted';
 
   const submittedColumns: TableColumn[] = [
-    { key: "vanName",      label: "Van Number",  width: "12%" },
-    { key: "engineerName", label: "Engineer",    width: "18%" },
-    { key: "tradeGroup",   label: "Trade Group", width: "18%" },
-    { key: "latestVcrDate",label: "Last Report", width: "15%" },
-    { key: "daysSince",    label: "Days Since",  width: "12%" },
-    { key: "status",       label: "Status",      width: "12%" },
+    { key: "vanName",      label: "Van Number",  width: "12%", sortable: true },
+    { key: "engineerName", label: "Engineer",    width: "18%", sortable: true },
+    { key: "tradeGroup",   label: "Trade Group", width: "18%", sortable: true },
+    { key: "latestVcrDate",label: "Last Report", width: "15%", sortable: true },
+    { key: "daysSince",    label: "Days Since",  width: "12%", sortable: true },
+    { key: "status",       label: "Status",      width: "12%", sortable: true },
   ];
 
   const notSubmittedColumns: TableColumn[] = [
-    { key: "vanName",      label: "Van Number",   width: "12%" },
-    { key: "engineerName", label: "Engineer",     width: "18%" },
-    { key: "tradeGroup",   label: "Trade Group",  width: "18%" },
-    { key: "latestVcrDate",label: "Last Report",  width: "15%" },
-    { key: "daysSince",    label: "Days Overdue", width: "12%" },
-    { key: "status",       label: "Status",       width: "12%" },
+    { key: "vanName",      label: "Van Number",   width: "12%", sortable: true },
+    { key: "engineerName", label: "Engineer",     width: "18%", sortable: true },
+    { key: "tradeGroup",   label: "Trade Group",  width: "18%", sortable: true },
+    { key: "latestVcrDate",label: "Last Report",  width: "15%", sortable: true },
+    { key: "daysSince",    label: "Days Overdue", width: "12%", sortable: true },
+    { key: "status",       label: "Status",       width: "12%", sortable: true },
   ];
 
   // ── Loading screen ─────────────────────────────────────────────────────────
@@ -648,7 +726,7 @@ const VehicleConditionDashboard: React.FC = () => {
 
       {/* ── Header ── */}
       <div style={{
-        backgroundImage: "url('/profile_header.jpg')",
+        backgroundImage: "url('/London_Skyliner.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
@@ -665,7 +743,7 @@ const VehicleConditionDashboard: React.FC = () => {
         <div style={{ maxWidth: "1400px", margin: "0 auto", position: "relative", zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
             <div>
-              <h1 style={{ fontSize: "28px", fontWeight: 700, color: "#FFFFFF", margin: "0 0 8px 0" }}>Vehicle Condition Report with AI parser</h1>
+              <h1 style={{ fontSize: "28px", fontWeight: 700, color: "#FFFFFF", margin: "0 0 8px 0" }}>Chumey Vehicle Condition Report</h1>
               <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.75)", margin: 0 }}>VCR Compliance Dashboard • As of {dashboard?.asOfDate}</p>
             </div>
             {!showsAllTrades() && (
@@ -741,10 +819,9 @@ const VehicleConditionDashboard: React.FC = () => {
             </div>
           )}
         </div>
-
         {/* ── KPI Cards ── */}
         <div style={{ display: "flex", gap: "16px", marginBottom: "40px", flexWrap: "wrap" }}>
-          <KPICard label="Total Allocated" value={totalAllocatedForUser} subtext={!showsAllTrades() ? `${userTrade} trade only` : "Active Vehicles"} color="blue" icon="🚐" />
+          <KPICard label="Total Active Engineers for Trade  " value={totalAllocatedForUser} subtext={!showsAllTrades() ? `${userTrade} trade only` : ""} color="blue" icon="" />
           <KPICard label="SUBMITTED"     value={displaySubmittedCount}    subtext={displaySubmittedSubtext}    color="green" icon="✓" onClick={() => setModalOpen("submitted")} />
           <KPICard label="NOT SUBMITTED" value={displayNotSubmittedCount} subtext={displayNotSubmittedSubtext} color="red"   icon="✗" onClick={() => setModalOpen("notSubmitted")} />
         </div>
@@ -809,12 +886,18 @@ const VehicleConditionDashboard: React.FC = () => {
           columns={submittedColumns}
           emptyMessage={filterDate ? `No VCRs submitted on ${filterDate}` : filterMode === 'today' ? "No VCRs submitted today" : filterMode === 'yesterday' ? "No VCRs submitted yesterday" : filterMode === '7days' ? "No VCRs in last 7 days" : "All vehicles are compliant!"}
           onVehicleClick={fetchVcrForVehicle}
+          sortKey={submittedSort.key}
+          sortOrder={submittedSort.order}
+          onSort={handleSubmittedSort}
         />
         <Table
           title="✗ NOT SUBMITTED"
           data={filteredNotSubmitted}
           columns={notSubmittedColumns}
           emptyMessage="All vehicles have submitted reports!"
+          sortKey={notSubmittedSort.key}
+          sortOrder={notSubmittedSort.order}
+          onSort={handleNotSubmittedSort}
         />
       </div>
 
@@ -956,7 +1039,38 @@ const VehicleConditionDashboard: React.FC = () => {
                               ].filter(Boolean) as { text: string; color: string }[];
 
                               return (
-                                <div key={idx} style={{ borderRadius: "12px", background: "#FFFFFF", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", display: "flex" }}>
+                                <div 
+                                  key={idx}
+                                  onClick={() => {
+                                    // Find matching image from VCR popup results
+                                    if (vcrPopup.result?.images) {
+                                      const matchingImage = vcrPopup.result.images.find(img => 
+                                        img.title.includes(report.image_title) || report.image_title.includes(img.title)
+                                      );
+                                      if (matchingImage) {
+                                        setLightboxImage(matchingImage.imageUrl);
+                                        setLightboxTitle(report.image_title);
+                                      }
+                                    }
+                                  }}
+                                  style={{ 
+                                    borderRadius: "12px", 
+                                    background: "#FFFFFF", 
+                                    overflow: "hidden", 
+                                    boxShadow: "0 2px 12px rgba(0,0,0,0.07)", 
+                                    display: "flex",
+                                    cursor: "pointer",
+                                    transition: "all 0.2s ease",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.12)";
+                                    (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.07)";
+                                    (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
+                                  }}
+                                >
 
                                   {/* Left colour bar */}
                                   <div style={{ width: "6px", flexShrink: 0, background: condColor }} />

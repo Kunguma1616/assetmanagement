@@ -275,7 +275,7 @@ export default function AssetCost() {
                 Asset Management
               </p>
               <h1 style={{ fontSize: 26, fontWeight: 900, color: C.white, margin: 0, letterSpacing: "-0.02em", fontFamily: FONT }}>
-                Cost Tracking
+                Chumely Cost Tracking
               </h1>
               <p style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: "4px 0 0", fontWeight: 500, fontFamily: FONT }}>
                 {assets.length > 0 ? `${assets.length} assets tracked` : "Asset cost overview"}

@@ -1,234 +1,192 @@
 /**
  * Trade Group Mapping
  * Maps individual trade skills to their parent trade categories
+ *
+ * Source of truth: get_manager_mapping() + final SOQL exclusions
+ * SOQL excludes: Key, Utilities, PM, Test Ops (never reach frontend)
+ *
+ * james.parkinson  → Gas, HVAC & Electrical  (HVAC, Gas, Electrical only)
+ * lee.merryweather → Building Fabric          (Roofing, Multi, Decoration, Building Fabric,
+ *                                              Carpentry, General Builders, Vent Hygiene)
+ *                  + Environmental Services   (Pest Control, Sanitisation, Waste Clearance)
+ * gavin.petty      → LDR                      (Damp, Mould, Drying, Restoration)
+ * martin/sam/george/ryan → Drainage & Plumbing
+ * marjan/neil      → LDR                      (Leak Detection)
+ * paul.mcgee       → Fire Safety
  */
 
-/**
- * User Trade Group Restrictions
- * Maps specific user emails to their allowed trade groups
- * Restricted users can ONLY see their assigned trade group
- * Unrestricted users can see all trade groups
- */
+// ─── Restricted Users ────────────────────────────────────────────────────────
+
 export const RESTRICTED_USERS: Record<string, string[]> = {
-  'paul.mcgee@aspect.co.uk': ['Fire Safety'],
-  'martin.mackie@aspect.co.uk': ['Drainage', 'Plumbing'],
-  'james.parkinson@aspect.co.uk': ['HVAC', 'Electrical', 'Gas'],
-  'lee.merryweather@aspect.co.uk': ['Roofing', 'Windows & Doors', 'General Builders', 'Multi'],
-  'marjan@aspect.co.uk': ['Leak Detection', 'Damp & Mould'],
-  'peter.raynsford@aspect.co.uk': ['Drainage', 'Plumbing'],
+  'paul.mcgee@aspect.co.uk':       ['Fire Safety'],
+  'martin.mackie@aspect.co.uk':    ['Drainage & Plumbing'],
+  'james.parkinson@aspect.co.uk':  ['Gas, HVAC & Electrical'],
+  'lee.merryweather@aspect.co.uk': ['Building Fabric'],
+  'marjan.kola@aspect.co.uk':      ['LDR'],
+  'peter.raynsford@aspect.co.uk':  ['Drainage & Plumbing'],
 };
 
-/**
- * Trade Group Picklist - All available trade groups for UI dropdowns
- * Matches Salesforce Trade_Lookup__c picklist values
- */
+// ─── Trade Group Picklist ─────────────────────────────────────────────────────
+
 export const TRADE_GROUP_PICKLIST: string[] = [
-  'Utilities',
-  'Drainage',
-  'Key',
-  'Gas',
-  'Leak Detection',
-  'Electrical',
-  'Windows & Doors',
+  'Building Fabric',
+  'Drainage & Plumbing',
+  'Environmental Services',
   'Fire Safety',
-  'Roofing',
-  'General Builders',
-  'Plumbing',
-  'Damp & Mould',
-  'Multi',
-  'Waste Clearance',
-  'HVAC',
+  'Gas, HVAC & Electrical',
+  'LDR',
 ];
 
-/**
- * Get available trade groups for a user
- * If user is restricted, return only their assigned trade group
- * Otherwise, return all trade groups
- */
+// ─── Helper Functions ─────────────────────────────────────────────────────────
+
 export const getAvailableTradeGroups = (userEmail?: string): string[] => {
-  if (!userEmail) {
-    console.warn('⚠️ No email provided to getAvailableTradeGroups');
-    return TRADE_GROUP_PICKLIST;
-  }
-  
+  if (!userEmail) return TRADE_GROUP_PICKLIST;
   const normalizedEmail = userEmail.toLowerCase().trim();
   const restrictedGroups = RESTRICTED_USERS[normalizedEmail];
-  
-  console.log(`🔍 getAvailableTradeGroups called:`, {
-    originalEmail: userEmail,
-    normalizedEmail: normalizedEmail,
-    isInRestrictedUsers: normalizedEmail in RESTRICTED_USERS,
-    restrictedGroups: restrictedGroups,
-    availableTradeGroups: restrictedGroups && restrictedGroups.length > 0 ? restrictedGroups : TRADE_GROUP_PICKLIST
-  });
-  
-  if (restrictedGroups && restrictedGroups.length > 0) {
-    console.log(`✅ User ${normalizedEmail} restricted to:`, restrictedGroups);
-    return restrictedGroups;
-  }
-  
-  console.log(`✅ User ${normalizedEmail} has full access to all trade groups`);
+  if (restrictedGroups && restrictedGroups.length > 0) return restrictedGroups;
   return TRADE_GROUP_PICKLIST;
 };
 
-/**
- * Check if user is restricted to specific trade groups
- */
 export const isUserRestricted = (userEmail?: string): boolean => {
   if (!userEmail) return false;
-  const normalizedEmail = userEmail.toLowerCase().trim();
-  const isRestricted = normalizedEmail in RESTRICTED_USERS;
-  console.log(`🔍 Checking restriction for ${normalizedEmail}: ${isRestricted}`);
-  return isRestricted;
+  return userEmail.toLowerCase().trim() in RESTRICTED_USERS;
 };
 
-/**
- * Get the default (and only) trade group for a restricted user
- */
 export const getDefaultTradeGroup = (userEmail?: string): string | null => {
   if (!userEmail) return null;
-  const normalizedEmail = userEmail.toLowerCase().trim();
-  const groups = RESTRICTED_USERS[normalizedEmail];
-  if (groups && groups.length > 0) {
-    console.log(`🔐 Default trade group for ${normalizedEmail}: ${groups[0]}`);
-    return groups[0];
-  }
-  return null;
+  const groups = RESTRICTED_USERS[userEmail.toLowerCase().trim()];
+  return groups && groups.length > 0 ? groups[0] : null;
 };
 
-export const TRADE_MAPPING: Record<string, string> = {
-  // Direct mapping to Salesforce Trade_Lookup__c values (ordered by user's picklist)
-  'Utilities': 'Utilities',
-  'utilities': 'Utilities',
-  'Ultilities': 'Utilities',
-  'ultilities': 'Utilities',
-  'ULUITLITIES': 'Utilities',
+// ─── Trade → Category Map ─────────────────────────────────────────────────────
+// NOTE: Key, Utilities, PM, Test Ops excluded by SOQL — intentionally not mapped.
 
-  'Drainage': 'Drainage',
-  'drainage': 'Drainage',
+export const TRADE_TO_CATEGORY: Record<string, string> = {
 
-  'Key': 'Key',
-  'key': 'Key',
-  'Key Account': 'Key',
-  'Key Accounts': 'Key',
-  'key account': 'Key',
-  'key acoount': 'Key',
-  'key accounts': 'Key',
-  'Insurance': 'Key',
-  'Manager for Insurance': 'Key',
-  'manager for insurance': 'Key',
-  'insurance': 'Key',
+  // ── Building Fabric (lee.merryweather) ────────────────────────────────────
+  'Bathroom Refurbishment':  'Building Fabric',
+  'bathroom refurbishment':  'Building Fabric',
+  'Building':                'Building Fabric',
+  'building':                'Building Fabric',
+  'Building and Fabric':     'Building Fabric',
+  'building and fabric':     'Building Fabric',
+  'Building Fabric':         'Building Fabric',
+  'Building n fabric':       'Building Fabric',
+  'BUILDING n fabric':       'Building Fabric',
+  'Building and fabric':     'Building Fabric',
+  'buiding and fabric':      'Building Fabric',
+  'Carpentry':               'Building Fabric',
+  'carpentry':               'Building Fabric',
+  'Carpenter':               'Building Fabric',
+  'carpenter':               'Building Fabric',
+  'CARPTERNER':              'Building Fabric',
+  'Decoration':              'Building Fabric',
+  'decoration':              'Building Fabric',
+  'Decorating':              'Building Fabric',
+  'decorating':              'Building Fabric',
+  'General Builders':        'Building Fabric',
+  'general builders':        'Building Fabric',
+  'Multi':                   'Building Fabric',
+  'multi':                   'Building Fabric',
+  
+  'Roofing':                 'Building Fabric',
+  'roofing':                 'Building Fabric',
+  'Vent Hygiene':            'Building Fabric',
+  'vent hygiene':            'Building Fabric',
+  'Windows':                 'Building Fabric',
+  'windows':                 'Building Fabric',
+  'Windows & Doors':         'Building Fabric',
+  'windows & doors':         'Building Fabric',
+  'Windows and Doors':       'Building Fabric',
+  'windows and doors':       'Building Fabric',
+  'windows and dors':        'Building Fabric',
+  'Doors':                   'Building Fabric',
+  'doors':                   'Building Fabric',
 
-  'Gas': 'Gas',
-  'gas': 'Gas',
+  // ── Drainage & Plumbing (martin/sam/george/ryan) ──────────────────────────
+  'Drainage':                'Drainage & Plumbing',
+  'drainage':                'Drainage & Plumbing',
+  'Plumbing':                'Drainage & Plumbing',
+  'plumbing':                'Drainage & Plumbing',
+  'plumbling':               'Drainage & Plumbing',
 
-  'Leak Detection': 'Leak Detection',
-  'leak detection': 'Leak Detection',
-  'Leak detection': 'Leak Detection',
-  'Restoration': 'Leak Detection',
+  // ── Environmental Services (lee.merryweather subset) ─────────────────────
+  'Environmental Services':             'Environmental Services',
+  'environmental services':             'Environmental Services',
+  'Gardening':                          'Environmental Services',
+  'gardening':                          'Environmental Services',
+  'Pest Control':                       'Environmental Services',
+  'pest control':                       'Environmental Services',
+  'Pest Proofing':                      'Environmental Services',
+  'pest proofing':                      'Environmental Services',
+  'Rubbish Removal':                    'Environmental Services',
+  'rubbish removal':                    'Environmental Services',
+  'Sanitisation':                       'Environmental Services',
+  'sanitisation':                       'Environmental Services',
+  'Sanitisation & specialist cleaning': 'Environmental Services',
+  'sanitisation & specialist cleaning': 'Environmental Services',
+  'Waste Clearance':                    'Environmental Services',
+  'waste clearance':                    'Environmental Services',
 
-  'Electrical': 'Electrical',
-  'electrical': 'Electrical',
+  // ── Fire Safety (paul.mcgee) ──────────────────────────────────────────────
+  'Fire Safety':             'Fire Safety',
+  'fire safety':             'Fire Safety',
 
-  'Windows & Doors': 'Windows & Doors',
-  'Windows and Doors': 'Windows & Doors',
-  'windows and doors': 'Windows & Doors',
-  'windows and dors': 'Windows & Doors',
-  'Windows': 'Windows & Doors',
-  'Doors': 'Windows & Doors',
-  'Carpenter': 'Windows & Doors',
-  'CARPTERNER': 'Windows & Doors',
+  // ── Gas, HVAC & Electrical (james.parkinson: Gas, HVAC, Electrical ONLY) ─
+  'Air Conditioning':        'Gas, HVAC & Electrical',
+  'air conditioning':        'Gas, HVAC & Electrical',
+  'Electrical':              'Gas, HVAC & Electrical',
+  'electrical':              'Gas, HVAC & Electrical',
+  'Gas':                     'Gas, HVAC & Electrical',
+  'gas':                     'Gas, HVAC & Electrical',
+  'Heating':                 'Gas, HVAC & Electrical',
+  'heating':                 'Gas, HVAC & Electrical',
+  'HVAC':                    'Gas, HVAC & Electrical',
+  'hvac':                    'Gas, HVAC & Electrical',
+  'Ventilation':             'Gas, HVAC & Electrical',
+  'ventilation':             'Gas, HVAC & Electrical',
 
-  'Fire Safety': 'Fire Safety',
-  'fire safety': 'Fire Safety',
-
-  'Roofing': 'Roofing',
-  'roofing': 'Roofing',
-
-  'General Builders': 'General Builders',
-  'general builders': 'General Builders',
-  'Building': 'General Builders',
-  'Building Fabric': 'General Builders',
-  'Building and Fabric': 'General Builders',
-  'Building and fabric': 'General Builders',
-  'buiding and fabric': 'General Builders',
-  'Building n fabric': 'General Builders',
-  'BUILDING n fabric': 'General Builders',
-  'building and fabric': 'General Builders',
-  'Decoration': 'General Builders',
-  'Bathroom Refurbishment': 'General Builders',
-  'Project Manager': 'General Builders',
-  'project manager': 'General Builders',
-
-  'Plumbing': 'Plumbing',
-  'plumbling': 'Plumbing',
-  'plumbing': 'Plumbing',
-
-  'Damp & Mould': 'Damp & Mould',
-  'Damp and Mould': 'Damp & Mould',
-  'Damp': 'Damp & Mould',
-  'Damp and mould': 'Damp & Mould',
-  'damp and mould': 'Damp & Mould',
-  'damp mould': 'Damp & Mould',
-
-  'Multi': 'Multi',
-  'multi': 'Multi',
-
-  'Waste Clearance': 'Waste Clearance',
-  'waste clearance': 'Waste Clearance',
-  'Rubbish Removal': 'Waste Clearance',
-  'Gardening': 'Waste Clearance',
-  'Pest Control': 'Waste Clearance',
-  'Pest Proofing': 'Waste Clearance',
-  'Sanitisation & specialist cleaning': 'Waste Clearance',
-
-  'HVAC': 'HVAC',
-  'hvac': 'HVAC',
-  'Heating': 'HVAC',
-  'Ventilation': 'HVAC',
-  'Air Conditioning': 'HVAC',
+  // ── LDR (marjan/neil: Leak Detection + gavin.petty: Damp/Mould/Drying/Restoration)
+  'Damp':                    'LDR',
+  'damp':                    'LDR',
+  'Damp & Mould':            'LDR',
+  'Damp and Mould':          'LDR',
+  'Damp and mould':          'LDR',
+  'damp and mould':          'LDR',
+  'damp mould':              'LDR',
+  'Drying':                  'LDR',
+  'drying':                  'LDR',
+  'Leak Detection':          'LDR',
+  'leak detection':          'LDR',
+  'Leak detection':          'LDR',
+  'Mould':                   'LDR',
+  'mould':                   'LDR',
+  'Restoration':             'LDR',
+  'restoration':             'LDR',
 };
 
-/**
- * Get the parent trade group for a trade
- * Uses exact match, then case-insensitive, then substring matching
- * Returns the trade value itself as fallback if not found in mapping
- */
+// ─── getTradeGroup ────────────────────────────────────────────────────────────
+
 export const getTradeGroup = (trade: string): string => {
-  if (!trade || trade === 'N/A' || trade.trim() === '') {
-    return 'N/A';
-  }
+  if (!trade || trade === 'N/A' || trade.trim() === '') return 'N/A';
 
   const tradeTrimmed = trade.trim();
-  
-  // Try exact match first (fast path)
-  if (TRADE_MAPPING[tradeTrimmed]) {
-    return TRADE_MAPPING[tradeTrimmed];
-  }
 
-  // Try case-insensitive match
+  // Exact match
+  if (TRADE_TO_CATEGORY[tradeTrimmed]) return TRADE_TO_CATEGORY[tradeTrimmed];
+
+  // Case-insensitive match
   const tradeLower = tradeTrimmed.toLowerCase();
-  for (const [key, value] of Object.entries(TRADE_MAPPING)) {
-    if (key.toLowerCase() === tradeLower) {
-      return value;
-    }
+  for (const [key, value] of Object.entries(TRADE_TO_CATEGORY)) {
+    if (key.toLowerCase() === tradeLower) return value;
   }
 
-  // Try substring matching (e.g., "ULTILITIES" contains "utilities")
-  for (const [key, value] of Object.entries(TRADE_MAPPING)) {
-    if (tradeLower.includes(key.toLowerCase()) || key.toLowerCase().includes(tradeLower)) {
-      return value;
-    }
+  // Substring match
+  for (const [key, value] of Object.entries(TRADE_TO_CATEGORY)) {
+    if (tradeLower.includes(key.toLowerCase()) || key.toLowerCase().includes(tradeLower)) return value;
   }
 
-  // Fallback: return the actual trade value if not found in mapping
-  // This helps debug what values are actually in Salesforce
   return tradeTrimmed;
 };
 
-/**
- * Get all unique parent trade groups (7 groups from picklist)
- */
-export const getAllTradeGroups = (): string[] => {
-  return TRADE_GROUP_PICKLIST;
-};
+export const getAllTradeGroups = (): string[] => TRADE_GROUP_PICKLIST;

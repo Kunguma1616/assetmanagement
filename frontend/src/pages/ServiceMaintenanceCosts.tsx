@@ -321,7 +321,7 @@ export default function ServiceMaintenanceCosts() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-4xl font-bold" style={{ color: colors.grayscale.title }}>
-                  Service & Maintenance Costs
+                  Chumely Service & Maintenance Costs
                 </h1>
                 {isRestricted && (
                   <span style={{ 

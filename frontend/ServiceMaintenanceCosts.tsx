@@ -261,13 +261,12 @@ export default function ServiceMaintenanceCosts() {
 
   const getLeaseTradeColor = (tradeGroup: string) => {
     const map: {[k: string]: {bg: string; color: string}} = {
-      'Drainage & Plumbing': { bg: '#EFF6FF', color: '#1D4ED8' },
-      'HVAC & Electrical': { bg: '#FFF7ED', color: '#C2410C' },
-      'Gas, HVAC & Electrical': { bg: '#FFF7ED', color: '#C2410C' },
       'Building Fabric': { bg: '#F0FDF4', color: '#15803D' },
-      'LDR': { bg: '#FAF5FF', color: '#7E22CE' },
+      'Drainage & Plumbing': { bg: '#EFF6FF', color: '#1D4ED8' },
       'Environmental Services': { bg: '#ECFDF5', color: '#065F46' },
-      'Key Account': { bg: '#EFF6FF', color: '#1E40AF' },
+      'Fire Safety': { bg: '#FEE2E2', color: '#991B1B' },
+      'Gas, HVAC & Electrical': { bg: '#FFF7ED', color: '#C2410C' },
+      'LDR': { bg: '#FAF5FF', color: '#7E22CE' },
     };
     return map[tradeGroup] || { bg: '#F3F4F6', color: '#6B7280' };
   };

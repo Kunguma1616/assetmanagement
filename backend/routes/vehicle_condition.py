@@ -3,6 +3,7 @@ from fastapi.responses import Response
 import httpx
 import os
 import sys
+import traceback
 from datetime import datetime, timedelta, timezone
 import base64
 import sys
@@ -14,10 +15,164 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from salesforce_service import SalesforceService
 from groq_service import GroqService
 
+# ─── Trade mapping ────────────────────────────────────────────────────────────
+# Source of truth: get_manager_mapping()
+# SOQL excludes: Key, Utilities, PM, Test Ops — NOT mapped here.
+#
+# james.parkinson  → Gas, HVAC & Electrical  (Gas, HVAC, Electrical ONLY)
+# lee.merryweather → Building Fabric          (Roofing, Multi, Decoration, Carpentry,
+#                                              General Builders, Vent Hygiene, Building Fabric)
+#                  + Environmental Services   (Pest Control, Sanitisation, Waste Clearance)
+# gavin.petty      → LDR                      (Damp, Mould, Drying, Restoration)
+# martin/sam/george/ryan → Drainage & Plumbing
+# marjan/neil      → LDR                      (Leak Detection)
+# paul.mcgee       → Fire Safety
+
+TRADE_TO_CATEGORY = {
+    # Building Fabric (lee.merryweather)
+    'Bathroom Refurbishment':  'Building Fabric',
+    'bathroom refurbishment':  'Building Fabric',
+    'Building':                'Building Fabric',
+    'building':                'Building Fabric',
+    'Building and Fabric':     'Building Fabric',
+    'building and fabric':     'Building Fabric',
+    'Building Fabric':         'Building Fabric',
+    'Building n fabric':       'Building Fabric',
+    'BUILDING n fabric':       'Building Fabric',
+    'Building and fabric':     'Building Fabric',
+    'buiding and fabric':      'Building Fabric',
+    'Carpentry':               'Building Fabric',
+    'carpentry':               'Building Fabric',
+    'Carpenter':               'Building Fabric',
+    'carpenter':               'Building Fabric',
+    'CARPTERNER':              'Building Fabric',
+    'Decoration':              'Building Fabric',
+    'decoration':              'Building Fabric',
+    'Decorating':              'Building Fabric',
+    'decorating':              'Building Fabric',
+    'General Builders':        'Building Fabric',
+    'general builders':        'Building Fabric',
+    'Multi':                   'Building Fabric',
+    'multi':                   'Building Fabric',
+    'Project Manager':         'Building Fabric',
+    'project manager':         'Building Fabric',
+    'Roofing':                 'Building Fabric',
+    'roofing':                 'Building Fabric',
+    'Vent Hygiene':            'Building Fabric',
+    'vent hygiene':            'Building Fabric',
+
+    # Drainage & Plumbing (martin/sam/george/ryan)
+    'Drainage':                'Drainage & Plumbing',
+    'drainage':                'Drainage & Plumbing',
+    'Plumbing':                'Drainage & Plumbing',
+    'plumbing':                'Drainage & Plumbing',
+    'plumbling':               'Drainage & Plumbing',
+
+    # Environmental Services (lee.merryweather subset)
+    'Environmental Services':             'Environmental Services',
+    'environmental services':             'Environmental Services',
+    'Gardening':                          'Environmental Services',
+    'gardening':                          'Environmental Services',
+    'Pest Control':                       'Environmental Services',
+    'pest control':                       'Environmental Services',
+    'Pest Proofing':                      'Environmental Services',
+    'pest proofing':                      'Environmental Services',
+    'Rubbish Removal':                    'Environmental Services',
+    'rubbish removal':                    'Environmental Services',
+    'Sanitisation':                       'Environmental Services',
+    'sanitisation':                       'Environmental Services',
+    'Sanitisation & specialist cleaning': 'Environmental Services',
+    'sanitisation & specialist cleaning': 'Environmental Services',
+    'Waste Clearance':                    'Environmental Services',
+    'waste clearance':                    'Environmental Services',
+
+    # Fire Safety (paul.mcgee)
+    'Fire Safety':             'Fire Safety',
+    'fire safety':             'Fire Safety',
+
+    # Gas, HVAC & Electrical (james.parkinson: Gas, HVAC, Electrical ONLY)
+    'Air Conditioning':        'Gas, HVAC & Electrical',
+    'air conditioning':        'Gas, HVAC & Electrical',
+    'Doors':                   'Gas, HVAC & Electrical',
+    'doors':                   'Gas, HVAC & Electrical',
+    'Electrical':              'Gas, HVAC & Electrical',
+    'electrical':              'Gas, HVAC & Electrical',
+    'Gas':                     'Gas, HVAC & Electrical',
+    'gas':                     'Gas, HVAC & Electrical',
+    'Heating':                 'Gas, HVAC & Electrical',
+    'heating':                 'Gas, HVAC & Electrical',
+    'HVAC':                    'Gas, HVAC & Electrical',
+    'hvac':                    'Gas, HVAC & Electrical',
+    'Ventilation':             'Gas, HVAC & Electrical',
+    'ventilation':             'Gas, HVAC & Electrical',
+    'Windows':                 'Gas, HVAC & Electrical',
+    'windows':                 'Gas, HVAC & Electrical',
+    'Windows & Doors':         'Gas, HVAC & Electrical',
+    'Windows and Doors':       'Gas, HVAC & Electrical',
+    'windows and doors':       'Gas, HVAC & Electrical',
+    'windows and dors':        'Gas, HVAC & Electrical',
+
+    # LDR (marjan/neil: Leak Detection + gavin.petty: Damp/Mould/Drying/Restoration)
+    'Damp':                    'LDR',
+    'damp':                    'LDR',
+    'Damp & Mould':            'LDR',
+    'Damp and Mould':          'LDR',
+    'Damp and mould':          'LDR',
+    'damp and mould':          'LDR',
+    'damp mould':              'LDR',
+    'Drying':                  'LDR',
+    'drying':                  'LDR',
+    'Leak Detection':          'LDR',
+    'leak detection':          'LDR',
+    'Leak detection':          'LDR',
+    'Mould':                   'LDR',
+    'mould':                   'LDR',
+    'Restoration':             'LDR',
+    'restoration':             'LDR',
+}
+
+# ─── Final SOQL for engineers ─────────────────────────────────────────────────
+# Excludes: FSM accounts, test records, Key/Utilities/PM/Test Ops trades
+ENGINEERS_SOQL = """
+    SELECT Name, Trade_Lookup__c
+    FROM ServiceResource
+    WHERE Is_User_Active__c = true
+      AND IsActive = true
+      AND Trade_Lookup__c != null
+      AND FSM__c = false
+      AND Account.Chumley_Test_Record__c = false
+      AND RelatedRecord.Profile_Name__c = 'Engineer Partner Community'
+      AND Trade_Lookup__c NOT IN ('Key', 'Utilities', 'PM', 'Test Ops')
+    ORDER BY Name
+"""
+
+
+def map_trade_to_category(trade: str) -> str:
+    """Map any trade value to one of the 6 clean categories"""
+    if not trade:
+        return 'N/A'
+
+    trade_trimmed = trade.strip()
+
+    # Exact match (fastest)
+    if trade_trimmed in TRADE_TO_CATEGORY:
+        mapped = TRADE_TO_CATEGORY[trade_trimmed]
+        print(f"[TRADE_MAP] Exact match: '{trade_trimmed}' → '{mapped}'")
+        return mapped
+
+    # Case-insensitive match
+    for key, value in TRADE_TO_CATEGORY.items():
+        if key.lower() == trade_trimmed.lower():
+            print(f"[TRADE_MAP] Case match: '{trade_trimmed}' → '{value}'")
+            return value
+
+    print(f"[TRADE_MAP] ⚠️ NO MATCH for '{trade_trimmed}' - returning as-is")
+    return trade_trimmed
+
 
 router = APIRouter(prefix="/api/vehicle-condition", tags=["vehicle_condition"])
 sf_service = SalesforceService()
-groq_service = GroqService()          # ← THIS WAS MISSING — fixes the 500 error
+groq_service = GroqService()
 
 _http_client: httpx.AsyncClient | None = None
 
@@ -66,10 +221,10 @@ def check_vcr_submission_status(vehicle_input: str):
             LIMIT 1
         """
         vehicle_result = sf_service.execute_soql(vehicle_query)
-        
+
         if not vehicle_result:
             raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_input}")
-        
+
         vehicle_data = vehicle_result[0]
         vehicle_id = vehicle_data["Id"]
         vehicle_name = vehicle_data.get("Name", vehicle_input)
@@ -85,19 +240,19 @@ def check_vcr_submission_status(vehicle_input: str):
             LIMIT 1
         """
         allocation_result = sf_service.execute_soql(allocation_query)
-        
+
         if not allocation_result:
             raise HTTPException(status_code=404, detail=f"No allocation found for vehicle: {vehicle_name}")
-        
+
         allocation_data = allocation_result[0]
         allocation_start_str = allocation_data.get("Start_date__c")
         engineer_name = allocation_data.get("Service_Resource__r", {})
         engineer_name = engineer_name.get("Name", "Unassigned") if engineer_name else "Unassigned"
-        
+
         allocation_start_date = parse_salesforce_datetime(allocation_start_str)
         if not allocation_start_date:
             raise HTTPException(status_code=500, detail="Failed to parse allocation start date")
-        
+
         print(f"[COMPLIANCE] ✓ Latest allocation start: {allocation_start_date} | Engineer: {engineer_name}")
 
         print(f"[COMPLIANCE] Step 3: Getting latest VCR for {vehicle_name}")
@@ -114,7 +269,7 @@ def check_vcr_submission_status(vehicle_input: str):
             LIMIT 1
         """
         vcr_result = sf_service.execute_soql(vcr_query)
-        
+
         if not vcr_result:
             print(f"[COMPLIANCE] [WARN] No VCR exists for {vehicle_name}")
             return {
@@ -128,18 +283,18 @@ def check_vcr_submission_status(vehicle_input: str):
                 "flag": "RED",
                 "reason": "No VCR exists"
             }
-        
+
         vcr_data = vcr_result[0]
         vcr_id = vcr_data.get("Id")
         vcr_name = vcr_data.get("Name")
         vcr_last_modified_str = vcr_data.get("LastModifiedDate")
         vcr_last_modified_by = vcr_data.get("LastModifiedBy", {})
         vcr_last_modified_by = vcr_last_modified_by.get("Name", "Unknown") if vcr_last_modified_by else "Unknown"
-        
+
         last_modified_date = parse_salesforce_datetime(vcr_last_modified_str)
         if not last_modified_date:
             raise HTTPException(status_code=500, detail="Failed to parse VCR last modified date")
-        
+
         print(f"[COMPLIANCE] ✓ Latest VCR: {vcr_name} | Last Modified: {last_modified_date}")
 
         print(f"[COMPLIANCE] Step 4: Running compliance check")
@@ -148,7 +303,7 @@ def check_vcr_submission_status(vehicle_input: str):
         is_within_window = window_start <= last_modified_date <= window_end
         submitted = is_within_window
         flag = "GREEN" if is_within_window else "RED"
-        
+
         print(f"[COMPLIANCE] Window: {window_start} to {window_end}")
         print(f"[COMPLIANCE] VCR Modified: {last_modified_date}")
         print(f"[COMPLIANCE] Result: {flag} (submitted={submitted})")
@@ -175,19 +330,44 @@ def check_vcr_submission_status(vehicle_input: str):
 def get_compliance_dashboard_all_allocated():
     """
     📊 VCR COMPLIANCE DASHBOARD - All Allocated Vehicles
+    Only includes vehicles assigned to active engineers with valid Trade_Lookup__c
     """
     try:
         print(f"[VCR_DASHBOARD] Starting VCR Compliance Dashboard")
-        
+
         today = datetime.now(timezone.utc)
-        fourteen_days_ago = today - timedelta(days=14)
-        
+
+        # STEP 1: Get ONLY active engineers using the final SOQL
+        # Excludes: FSM accounts, test records, Key/Utilities/PM/Test Ops
+        print(f"[VCR_DASHBOARD] Fetching active engineers with trade assignments...")
+        engineers_data = sf_service.execute_soql(ENGINEERS_SOQL)
+
+        if not engineers_data:
+            print(f"[VCR_DASHBOARD] [WARN] No active engineers with trades found")
+            return {
+                "totalAllocated": 0,
+                "submittedCount": 0,
+                "notSubmittedCount": 0,
+                "submitted": [],
+                "notSubmitted": []
+            }
+
+        # Build engineers_map: engineer_name -> mapped_trade
+        engineers_map = {}
+        for engineer in engineers_data:
+            eng_name = engineer.get("Name", "").strip()
+            raw_trade = engineer.get("Trade_Lookup__c", "")
+            mapped_trade = map_trade_to_category(raw_trade)
+            engineers_map[eng_name] = mapped_trade
+
+        print(f"[VCR_DASHBOARD] ✓ Found {len(engineers_map)} active engineers with trades")
+
+        # STEP 2: Get vehicle allocations
         allocation_query = f"""
             SELECT Vehicle__c,
                    Vehicle__r.Name,
                    Vehicle__r.Reg_No__c,
-                   Service_Resource__r.Name,
-                   Service_Resource__r.Trade_Lookup__c
+                   Service_Resource__r.Name
             FROM Vehicle_Allocation__c
             WHERE Start_date__c <= TODAY
               AND (End_date__c = NULL OR End_date__c >= TODAY)
@@ -195,7 +375,7 @@ def get_compliance_dashboard_all_allocated():
         """
         print(f"[VCR_DASHBOARD] Fetching allocated vehicles...")
         allocated_vehicles = sf_service.execute_soql(allocation_query)
-        
+
         if not allocated_vehicles:
             print(f"[VCR_DASHBOARD] [WARN] No allocated vehicles found")
             return {
@@ -205,29 +385,30 @@ def get_compliance_dashboard_all_allocated():
                 "submitted": [],
                 "notSubmitted": []
             }
-        
-        # Filter out test/demo engineers in Python
+
+        # Filter allocations to ONLY include engineers in engineers_map
         filtered_allocations = []
         for allocation in allocated_vehicles:
-            eng_name = (allocation.get("Service_Resource__r") or {}).get("Name", "").lower()
-            if "test" not in eng_name and "demo" not in eng_name:
+            eng_name = (allocation.get("Service_Resource__r") or {}).get("Name", "").strip()
+            if eng_name in engineers_map:
                 filtered_allocations.append(allocation)
-        
-        # De-duplicate vehicles (keep first allocation for each vehicle)
+
+        print(f"[VCR_DASHBOARD] ✓ Filtered from {len(allocated_vehicles)} to {len(filtered_allocations)} valid allocations")
+
+        # De-duplicate vehicles (keep first allocation per vehicle)
         seen_vehicles = {}
-        total_allocations = len(allocated_vehicles)
         for allocation in filtered_allocations:
             vehicle_id = allocation["Vehicle__c"]
             if vehicle_id not in seen_vehicles:
                 seen_vehicles[vehicle_id] = allocation
-        
+
         allocated_vehicles = list(seen_vehicles.values())
         total_allocated = len(allocated_vehicles)
-        print(f"[VCR_DASHBOARD] ✓ Found {total_allocated} allocated vehicles (deduplicated from {total_allocations} allocations, {len(filtered_allocations)} after filtering test engineers)")
-        
+        print(f"[VCR_DASHBOARD] ✓ Deduplicated to {total_allocated} unique vehicles")
+
         vehicle_ids = [v["Vehicle__c"] for v in allocated_vehicles]
         vehicle_ids_str = "', '".join(vehicle_ids)
-        
+
         vcr_query = f"""
             SELECT Id,
                    Vehicle__c,
@@ -242,7 +423,7 @@ def get_compliance_dashboard_all_allocated():
         """
         print(f"[VCR_DASHBOARD] Fetching VCR records...")
         vcr_records = sf_service.execute_soql(vcr_query)
-        
+
         # Keep ONLY the latest VCR per vehicle
         latest_vcr_map = {}
         if vcr_records:
@@ -250,65 +431,69 @@ def get_compliance_dashboard_all_allocated():
                 vehicle_id = vcr["Vehicle__c"]
                 if vehicle_id not in latest_vcr_map:
                     latest_vcr_map[vehicle_id] = vcr
-        
-        print(f"[VCR_DASHBOARD] ✓ Found {len(vcr_records)} total VCRs, {len(latest_vcr_map)} with latest reports")
-        
+
+        print(f"[VCR_DASHBOARD] ✓ Found {len(vcr_records)} total VCRs, {len(latest_vcr_map)} latest")
+
         submitted_list = []
         not_submitted_list = []
-        
+
         for vehicle in allocated_vehicles:
-            vehicle_id   = vehicle["Vehicle__c"]
-            vehicle_name = (vehicle.get("Vehicle__r") or {}).get("Name", "Unknown")
-            vehicle_reg  = (vehicle.get("Vehicle__r") or {}).get("Reg_No__c", "")
+            vehicle_id    = vehicle["Vehicle__c"]
+            vehicle_name  = (vehicle.get("Vehicle__r") or {}).get("Name", "Unknown")
+            vehicle_reg   = (vehicle.get("Vehicle__r") or {}).get("Reg_No__c", "")
             engineer_name = (vehicle.get("Service_Resource__r") or {}).get("Name", "Unassigned")
-            
+            mapped_trade  = engineers_map.get(engineer_name, "Unknown")
+
             if vehicle_id in latest_vcr_map:
                 latest_vcr   = latest_vcr_map[vehicle_id]
                 vcr_date_str = latest_vcr.get("CreatedDate")
                 vcr_date     = parse_salesforce_datetime(vcr_date_str)
-                
+
                 if vcr_date:
                     days_since = (today - vcr_date).days
-                    
+
                     if days_since <= 14:
-                        print(f"[VCR_DASHBOARD] [OK] {vehicle_name}: SUBMITTED ({days_since} days ago)")
+                        print(f"[VCR_DASHBOARD] [OK] {vehicle_name}: SUBMITTED ({days_since} days ago) | Trade: {mapped_trade}")
                         submitted_list.append({
                             "vehicleId":     vehicle_id,
                             "vanName":       vehicle_name,
                             "regNo":         vehicle_reg or "N/A",
                             "engineerName":  engineer_name,
+                            "trade":         mapped_trade,
                             "latestVcrDate": vcr_date.date().isoformat(),
                             "daysSince":     days_since,
                             "status":        "Submitted"
                         })
                     else:
-                        print(f"[VCR_DASHBOARD] [ERROR] {vehicle_name}: OVERDUE ({days_since} days ago)")
+                        print(f"[VCR_DASHBOARD] [WARN] {vehicle_name}: OVERDUE ({days_since} days ago) | Trade: {mapped_trade}")
                         not_submitted_list.append({
                             "vehicleId":     vehicle_id,
                             "vanName":       vehicle_name,
                             "regNo":         vehicle_reg or "N/A",
                             "engineerName":  engineer_name,
+                            "trade":         mapped_trade,
                             "latestVcrDate": vcr_date.date().isoformat(),
                             "daysSince":     days_since,
                             "status":        "Overdue"
                         })
             else:
-                print(f"[VCR_DASHBOARD] [ERROR] {vehicle_name}: MISSING (no report)")
+                print(f"[VCR_DASHBOARD] [WARN] {vehicle_name}: MISSING (no report) | Trade: {mapped_trade}")
                 not_submitted_list.append({
                     "vehicleId":     vehicle_id,
                     "vanName":       vehicle_name,
                     "regNo":         vehicle_reg or "N/A",
                     "engineerName":  engineer_name,
+                    "trade":         mapped_trade,
                     "latestVcrDate": None,
                     "daysSince":     None,
                     "status":        "Missing"
                 })
-        
+
         submitted_count     = len(submitted_list)
         not_submitted_count = len(not_submitted_list)
-        
+
         print(f"[VCR_DASHBOARD] Summary: {total_allocated} total | {submitted_count} submitted | {not_submitted_count} not submitted")
-        
+
         return {
             "totalAllocated":    total_allocated,
             "submittedCount":    submitted_count,
@@ -332,7 +517,7 @@ def search_vcr_by_van(van_number_or_reg: str):
     """
     try:
         print(f"[VCR_SEARCH] Searching for: {van_number_or_reg}")
-        
+
         vehicle_query = f"""
             SELECT Id, Name, Van_Number__c, Reg_No__c
             FROM Vehicle__c
@@ -342,14 +527,14 @@ def search_vcr_by_van(van_number_or_reg: str):
             LIMIT 1
         """
         vehicle_result = sf_service.execute_soql(vehicle_query)
-        
+
         if not vehicle_result:
             raise HTTPException(status_code=404, detail="Vehicle not found")
-        
+
         vehicle      = vehicle_result[0]
         vehicle_id   = vehicle["Id"]
         vehicle_name = vehicle.get("Name", van_number_or_reg)
-        
+
         vcr_query = f"""
             SELECT Id,
                    Name,
@@ -363,24 +548,24 @@ def search_vcr_by_van(van_number_or_reg: str):
             LIMIT 1
         """
         vcr_result = sf_service.execute_soql(vcr_query)
-        
+
         if not vcr_result:
             return {"vehicle": vehicle_name, "latestVcr": None, "images": []}
-        
+
         vcr    = vcr_result[0]
         vcr_id = vcr["Id"]
-        
+
         doc_link_query = f"""
             SELECT ContentDocumentId FROM ContentDocumentLink
             WHERE LinkedEntityId = '{vcr_id}'
         """
         doc_links = sf_service.execute_soql(doc_link_query)
-        
+
         images = []
         if doc_links:
             doc_ids     = [link["ContentDocumentId"] for link in doc_links]
             doc_ids_str = "', '".join(doc_ids)
-            
+
             image_query = f"""
                 SELECT Id, Title, FileExtension, ContentSize
                 FROM ContentVersion
@@ -388,7 +573,7 @@ def search_vcr_by_van(van_number_or_reg: str):
                 AND IsLatest = true
             """
             image_results = sf_service.execute_soql(image_query)
-            
+
             if image_results:
                 for img in image_results:
                     images.append({
@@ -397,7 +582,7 @@ def search_vcr_by_van(van_number_or_reg: str):
                         "fileExtension": img.get("FileExtension", ""),
                         "imageUrl":      f"/api/vehicle-condition/image/{img['Id']}"
                     })
-        
+
         return {
             "vehicle": vehicle_name,
             "latestVcr": {
@@ -409,7 +594,7 @@ def search_vcr_by_van(van_number_or_reg: str):
             },
             "images": images
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -524,7 +709,6 @@ async def ai_analyse_vcr_images(form_id: str):
     try:
         print(f"[VCR_AI] Starting AI analysis for form: {form_id}")
 
-        # ── STEP 1: Get form details ───────────────────────────────────────
         form_query = f"""
             SELECT Id,
                    Name,
@@ -548,7 +732,6 @@ async def ai_analyse_vcr_images(form_id: str):
 
         print(f"[VCR_AI] Form: {form_data.get('Name')} | Vehicle: {vehicle_name} | Engineer: {engineer_name}")
 
-        # ── STEP 2: Get all image IDs linked to this form ──────────────────
         doc_link_query = f"""
             SELECT ContentDocumentId
             FROM ContentDocumentLink
@@ -585,7 +768,6 @@ async def ai_analyse_vcr_images(form_id: str):
 
         print(f"[VCR_AI] Found {len(image_records)} images to analyse")
 
-        # ── STEP 3 & 4: Download each image and convert to base64 ─────────
         if sf_service.mock_mode or not sf_service.sf:
             raise HTTPException(status_code=503, detail="Salesforce not connected")
 
@@ -644,7 +826,6 @@ async def ai_analyse_vcr_images(form_id: str):
                 detail="All image downloads failed — cannot run AI analysis"
             )
 
-        # ── STEP 5: Send to Llama Vision via GroqService ───────────────────
         print(f"[VCR_AI] Sending {len(images_for_ai)} images to Llama Vision...")
 
         reports = groq_service.analyse_vehicle_images(
@@ -654,7 +835,6 @@ async def ai_analyse_vcr_images(form_id: str):
             reg_no=reg_no
         )
 
-        # ── STEP 6: Calculate overall fleet status (RED > AMBER > GREEN) ──
         conditions = [r.get("overall_condition", "AMBER") for r in reports]
         if "RED" in conditions:
             overall_status = "RED"
@@ -689,36 +869,24 @@ async def ai_analyse_vcr_images(form_id: str):
 def get_engineers_with_trades():
     """
     Fetch active engineers with their Trade_Lookup__c from Salesforce.
-    Uses GROUP BY to deduplicate engineers by name and trade.
-    Filters out test/demo engineers in Python.
+    Uses final SOQL: excludes FSM, test records, Key/Utilities/PM/Test Ops.
+    Maps all trades to 6 clean categories.
     """
     try:
-        query = """
-            SELECT Name, Trade_Lookup__c
-            FROM ServiceResource
-            WHERE Is_User_Active__c = true
-              AND IsActive = true
-              AND Account.Chumley_Test_Record__c = false
-              
-              AND RelatedRecord.Profile_Name__c = 'Engineer Partner Community'
-              AND Trade_Lookup__c != null
-            GROUP BY Name, Trade_Lookup__c
-        """
-        results = sf_service.execute_soql(query)
+        results = sf_service.execute_soql(ENGINEERS_SOQL)
         if not results:
             return {"engineers": []}
-        
-        # Filter out test/demo engineers in Python (Salesforce SOQL doesn't support NOT LIKE)
+
         engineers = []
         for r in results:
-            name = (r.get("Name") or "").lower()
-            if "test" not in name and "demo" not in name:
-                engineers.append({
-                    "name": r["Name"],
-                    "trade": r.get("Trade_Lookup__c", "")
-                })
-        
-        print(f"[ENGINEERS] ✓ Returning {len(engineers)} active engineer-trade pairs from Salesforce (deduplicated by Name, Trade_Lookup__c)")
+            raw_trade    = r.get("Trade_Lookup__c", "")
+            mapped_trade = map_trade_to_category(raw_trade)
+            engineers.append({
+                "name":  r["Name"],
+                "trade": mapped_trade
+            })
+
+        print(f"[ENGINEERS] ✓ Returning {len(engineers)} active engineers (mapped to 6 categories)")
         for eng in engineers[:5]:
             print(f"[ENGINEERS] - {eng['name']}: {eng['trade']}")
         return {"engineers": engineers}
@@ -794,7 +962,7 @@ def get_vehicle_condition_dashboard():
                 WHERE CreatedDate = LAST_N_DAYS:14
             )
         """)
-        
+
         image_id_set = {rec['LinkedEntityId'] for rec in image_ids_result} if image_ids_result else set()
 
         with_image_list    = []

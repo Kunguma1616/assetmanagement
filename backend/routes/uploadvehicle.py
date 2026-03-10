@@ -29,17 +29,20 @@ sf_service = SalesforceService()
 # Picklist value mappings based on Salesforce configuration
 PICKLIST_MAPPINGS = {
     'trade_group': {
+        'building_fabric': 'Building Fabric',
         'drainage': 'Drainage & Plumbing',
         'drainage_plumbing': 'Drainage & Plumbing',
-        'leak_detection': 'Leak Detection, Damp & Restoration',
-        'leak_detection_damp_restoration': 'Leak Detection, Damp & Restoration',
-        'hvac': 'HVAC & Electrical',
-        'hvac_electrical': 'HVAC & Electrical',
-        'electrical': 'HVAC & Electrical',
-        'building_fabric': 'Building Fabric',
-        'fire_safety': 'Fire Safety',
         'environmental_services': 'Environmental Services',
-        'office': 'Office',
+        'fire_safety': 'Fire Safety',
+        'gas_hvac_electrical': 'Gas, HVAC & Electrical',
+        'hvac': 'Gas, HVAC & Electrical',
+        'hvac_electrical': 'Gas, HVAC & Electrical',
+        'electrical': 'Gas, HVAC & Electrical',
+        'ldr': 'LDR',
+        'leak_detection': 'LDR',
+        'leak_detection_damp_restoration': 'LDR',
+        'damp': 'LDR',
+        'restoration': 'LDR',
     }
 }
 

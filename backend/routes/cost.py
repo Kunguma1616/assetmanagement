@@ -110,13 +110,12 @@ def load_lease_data():
 def get_trade_groups():
     """Returns available trade groups. Frontend calls /api/leases/trade-groups"""
     trade_groups = [
-        "Drainage & Plumbing",
-        "HVAC & Electrical",
         "Building Fabric",
-        "LDR",
+        "Drainage & Plumbing",
         "Environmental Services",
-        "Key Account",
+        "Fire Safety",
         "Gas, HVAC & Electrical",
+        "LDR",
     ]
     return {"success": True, "data": trade_groups}
 
