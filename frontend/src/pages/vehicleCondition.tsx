@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { getTradeGroup, getAllTradeGroups } from '@/config/tradeMapping';
+import { getTradeGroup, getAllTradeGroups, RESTRICTED_USERS, isExcludedTrade } from '@/config/tradeMapping';
 import { useUserTrade } from '@/hooks/useUserTrade';
 import { Lock } from 'lucide-react';
 
@@ -10,6 +10,7 @@ interface SubmittedVCR {
   regNo: string;
   engineerName: string;
   trade?: string;
+  rawTrade?: string;
   tradeGroup?: string;
   latestVcrDate: string;
   daysSince: number;
@@ -22,6 +23,7 @@ interface NotSubmittedVCR {
   regNo: string;
   engineerName: string;
   trade?: string;
+  rawTrade?: string;
   tradeGroup?: string;
   latestVcrDate: string | null;
   daysSince: number | null;
@@ -89,19 +91,12 @@ interface SearchResult {
 
 /* ── Design Tokens (Company Palette) ── */
 const C = {
-  // Brand
   brand: { blue: "#27549D", yellow: "#F1FF24" },
-  // Support
   support: { gray: "#848EA3", green: "#2EB844", orange: "#F29630", red: "#D15134" },
-  // Primary (Blue)
   primary: { light: "#7099DB", default: "#27549D", darker: "#17325E", subtle: "#F7F9FD" },
-  // Error (Red)
   error: { light: "#E49786", default: "#D15134", darker: "#812F1D", subtle: "#FAEDEA" },
-  // Warning (Orange)
   warning: { light: "#F7C182", default: "#F29630", darker: "#A35C0A", subtle: "#FEF5EC" },
-  // Success (kept for status badges)
   success: { light: "#A8D5BA", default: "#40916C", darker: "#1B4B35", subtle: "#E8F5F1" },
-  // Grayscale
   gray: {
     title: "#1A1D23",
     body: "#323843",
@@ -113,7 +108,6 @@ const C = {
     borderSubtle: "#E8EAEE",
     surface: "#F3F4F6",
   },
-  // Text
   text: {
     title: "#1A1D23",
     body: "#323843",
@@ -125,7 +119,6 @@ const C = {
     errorLabel: "#812F1D",
     warningLabel: "#A35C0A",
   },
-  // Border
   border: {
     primary: "#DEE8F7",
     error: "#F6DBD5",
@@ -133,7 +126,6 @@ const C = {
     default: "#CDD1DA",
     subtle: "#E8EAEE",
   },
-  // Surface
   surface: {
     primarySubtle: "#F7F9FD",
     errorSubtle: "#FAEDEA",
@@ -162,34 +154,13 @@ const KPICard: React.FC<KPICardProps> = ({ label, value, subtext, icon, color, o
     orange: { bg: C.surface.warningSubtle, text: C.warning.default, border: C.border.warning },
     red: { bg: C.surface.errorSubtle, text: C.error.default, border: C.border.error },
   };
-
   const colors = colorMap[color];
-
   return (
     <div
       onClick={onClick}
-      style={{
-        padding: "24px",
-        borderRadius: "12px",
-        border: `2px solid ${colors.border}`,
-        background: colors.bg,
-        flex: 1,
-        minWidth: "200px",
-        cursor: onClick ? "pointer" : "default",
-        transition: onClick ? "transform 0.2s, box-shadow 0.2s" : "none",
-      }}
-      onMouseEnter={(e) => {
-        if (onClick) {
-          (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-          (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (onClick) {
-          (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-          (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-        }
-      }}
+      style={{ padding: "24px", borderRadius: "12px", border: `2px solid ${colors.border}`, background: colors.bg, flex: 1, minWidth: "200px", cursor: onClick ? "pointer" : "default", transition: onClick ? "transform 0.2s, box-shadow 0.2s" : "none" }}
+      onMouseEnter={(e) => { if (onClick) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)"; } }}
+      onMouseLeave={(e) => { if (onClick) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; } }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "12px" }}>
         <h3 style={{ fontSize: "13px", fontWeight: 600, color: C.gray.subtle, margin: 0 }}>{label}</h3>
@@ -223,80 +194,46 @@ interface TableProps {
 const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVehicleClick, sortKey, sortOrder, onSort }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Submitted":  return { bg: C.surface.successSubtle, color: C.success.default };
-      case "Overdue":    return { bg: C.surface.warningSubtle, color: C.warning.default };
-      case "Missing":    return { bg: C.surface.errorSubtle,   color: C.error.default };
-      default:           return { bg: C.gray.negative,         color: C.gray.body };
+      case "Submitted": return { bg: C.surface.successSubtle, color: C.success.default };
+      case "Overdue":   return { bg: C.surface.warningSubtle, color: C.warning.default };
+      case "Missing":   return { bg: C.surface.errorSubtle,   color: C.error.default };
+      default:          return { bg: C.gray.negative,         color: C.gray.body };
     }
   };
 
-  // Sort data
   const sortedData = [...data].sort((a, b) => {
     if (!sortKey) return 0;
-    
     const aVal = a[sortKey as keyof typeof a];
     const bVal = b[sortKey as keyof typeof b];
-    
-    // Handle null/undefined
     if (!aVal && bVal) return sortOrder === 'asc' ? -1 : 1;
     if (aVal && !bVal) return sortOrder === 'asc' ? 1 : -1;
     if (!aVal && !bVal) return 0;
-    
-    // Numeric comparison
-    if (typeof aVal === 'number' && typeof bVal === 'number') {
-      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-    }
-    
-    // String comparison
+    if (typeof aVal === 'number' && typeof bVal === 'number') return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
     const aStr = String(aVal).toLowerCase();
     const bStr = String(bVal).toLowerCase();
-    if (sortOrder === 'asc') {
-      return aStr.localeCompare(bStr);
-    } else {
-      return bStr.localeCompare(aStr);
-    }
+    return sortOrder === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
   });
 
   return (
     <div style={{ marginBottom: "32px" }}>
       <h2 style={{ fontSize: "18px", fontWeight: 700, color: C.text.title, marginBottom: "16px" }}>{title}</h2>
-      <p style={{ fontSize: "12px", color: C.gray.caption, marginBottom: "12px" }}>
-        {data.length} vehicle{data.length !== 1 ? "s" : ""}
-      </p>
+      <p style={{ fontSize: "12px", color: C.gray.caption, marginBottom: "12px" }}>{data.length} vehicle{data.length !== 1 ? "s" : ""}</p>
       <div style={{ overflowX: "auto", borderRadius: "10px", border: `1px solid ${C.border.subtle}` }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, fontSize: "13px", background: "#FFFFFF" }}>
           <thead>
             <tr style={{ borderBottom: `2px solid ${C.border.subtle}`, background: C.gray.negative }}>
               {columns.map((col) => (
-                <th 
-                  key={col.key} 
+                <th
+                  key={col.key}
                   onClick={() => col.sortable && onSort?.(col.key)}
-                  style={{ 
-                    padding: "12px 16px", 
-                    textAlign: "left", 
-                    fontWeight: 600, 
-                    color: C.text.body, 
-                    width: col.width,
-                    cursor: col.sortable ? 'pointer' : 'default',
-                    userSelect: 'none',
-                    background: sortKey === col.key ? `${C.primary.default}10` : 'inherit',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (col.sortable) {
-                      (e.currentTarget as HTMLElement).style.background = `${C.primary.default}15`;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = sortKey === col.key ? `${C.primary.default}10` : 'inherit';
-                  }}
+                  style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: C.text.body, width: col.width, cursor: col.sortable ? 'pointer' : 'default', userSelect: 'none', background: sortKey === col.key ? `${C.primary.default}10` : 'inherit', transition: 'all 0.2s' }}
+                  onMouseEnter={(e) => { if (col.sortable) (e.currentTarget as HTMLElement).style.background = `${C.primary.default}15`; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = sortKey === col.key ? `${C.primary.default}10` : 'inherit'; }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {col.label}
                     {col.sortable && sortKey === col.key && (
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: C.primary.default }}>
-                        {sortOrder === 'asc' ? '↑' : '↓'}
-                      </span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: C.primary.default }}>{sortOrder === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </div>
                 </th>
@@ -306,61 +243,34 @@ const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVeh
           <tbody>
             {sortedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} style={{ padding: "60px 16px", textAlign: "center", color: C.gray.caption, fontSize: "14px", fontWeight: 500 }}>
-                  {emptyMessage}
-                </td>
+                <td colSpan={columns.length} style={{ padding: "60px 16px", textAlign: "center", color: C.gray.caption, fontSize: "14px", fontWeight: 500 }}>{emptyMessage}</td>
               </tr>
             ) : (
               sortedData.map((row, idx) => (
-                <tr
-                  key={idx}
-                  style={{ borderBottom: `1px solid ${C.border.subtle}`, transition: "background 0.2s" }}
+                <tr key={idx} style={{ borderBottom: `1px solid ${C.border.subtle}`, transition: "background 0.2s" }}
                   onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = C.gray.negative)}
                   onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = "#FFFFFF")}
                 >
                   {columns.map((col) => {
                     let content: React.ReactNode = row[col.key as keyof typeof row] as React.ReactNode;
-
                     if (col.key === "engineerName" && onVehicleClick) {
                       const vanName = (row as SubmittedVCR | NotSubmittedVCR).vanName;
                       content = (
-                        <span
-                          role="button" tabIndex={0}
-                          onClick={() => onVehicleClick(vanName)}
-                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onVehicleClick(vanName); }}
-                          style={{ color: C.primary.default, fontWeight: 600, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}
-                        >
+                        <span role="button" tabIndex={0} onClick={() => onVehicleClick(vanName)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onVehicleClick(vanName); }}
+                          style={{ color: C.primary.default, fontWeight: 600, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>
                           {content}
                         </span>
                       );
                     }
-
                     if (col.key === "status") {
                       const colors = getStatusColor(content as string);
-                      content = (
-                        <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: "6px", background: colors.bg, color: colors.color, fontSize: "12px", fontWeight: 600 }}>
-                          {content}
-                        </span>
-                      );
+                      content = <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: "6px", background: colors.bg, color: colors.color, fontSize: "12px", fontWeight: 600 }}>{content}</span>;
                     }
-
                     if (col.key === "daysSince" && content !== null && content !== undefined) {
-                      content = (
-                        <span style={{ fontWeight: 600, color: (content as number) > 14 ? C.error.default : C.success.default }}>
-                          {content === null ? "No data" : `${content} days`}
-                        </span>
-                      );
+                      content = <span style={{ fontWeight: 600, color: (content as number) > 14 ? C.error.default : C.success.default }}>{content === null ? "No data" : `${content} days`}</span>;
                     }
-
-                    if (col.key === "latestVcrDate") {
-                      content = content || "No report";
-                    }
-
-                    return (
-                      <td key={col.key} style={{ padding: "12px 16px", color: C.text.body, width: col.width, wordBreak: "break-word" }}>
-                        {content}
-                      </td>
-                    );
+                    if (col.key === "latestVcrDate") content = content || "No report";
+                    return <td key={col.key} style={{ padding: "12px 16px", color: C.text.body, width: col.width, wordBreak: "break-word" }}>{content}</td>;
                   })}
                 </tr>
               ))
@@ -382,10 +292,7 @@ interface LightboxProps {
 const Lightbox: React.FC<LightboxProps> = ({ image, title, onClose }) => {
   if (!image) return null;
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(26,29,35,0.85)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", backdropFilter: "blur(8px)" }}
-    >
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(26,29,35,0.85)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", backdropFilter: "blur(8px)" }}>
       <div style={{ textAlign: "center", maxWidth: "90vw" }}>
         <img src={image} alt={title} style={{ maxWidth: "90vw", maxHeight: "80vh", borderRadius: "10px", boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} />
         <p style={{ color: "#FFFFFF", marginTop: "14px", fontFamily: FONT, fontSize: "13px", fontWeight: 500 }}>{title}</p>
@@ -408,16 +315,9 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
   if (!isOpen) return null;
   const colorMap = { green: C.success.default, orange: C.warning.default, red: C.error.default };
   const titleColor = colorMap[color as keyof typeof colorMap] || C.primary.default;
-
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(26,29,35,0.7)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: "#FFFFFF", borderRadius: "12px", maxWidth: "90vw", maxHeight: "85vh", width: "1000px", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-      >
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(26,29,35,0.7)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#FFFFFF", borderRadius: "12px", maxWidth: "90vw", maxHeight: "85vh", width: "1000px", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div style={{ padding: "24px 28px", borderBottom: `1px solid ${C.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ fontSize: "20px", fontWeight: 700, color: titleColor, margin: 0 }}>{title}</h2>
           <button onClick={onClose} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: C.gray.subtle, padding: "0", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
@@ -477,9 +377,9 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
 /* ── Main Component ── */
 const VehicleConditionDashboard: React.FC = () => {
 
-  // ── State ──────────────────────────────────────────────────────────────────
   const [dashboard, setDashboard]             = useState<DashboardData | null>(null);
-  const [engineerTrades, setEngineerTrades]   = useState<Record<string, string>>({});
+  const [engineerTrades, setEngineerTrades]       = useState<Record<string, string>>({});
+  const [engineerRawTrades, setEngineerRawTrades] = useState<Record<string, string>>({});
   const [loading, setLoading]                 = useState(true);
   const [searchTerm, setSearchTerm]           = useState("");
   const [searchResult, setSearchResult]       = useState<SearchResult | null>(null);
@@ -491,65 +391,50 @@ const VehicleConditionDashboard: React.FC = () => {
   const [filterMode, setFilterMode]           = useState<'today' | 'yesterday' | '7days' | null>(null);
   const [filterDate, setFilterDate]           = useState<string>("");
   const [tradeGroupFilter, setTradeGroupFilter] = useState<string>("");
+  const [leeSubFilter, setLeeSubFilter]         = useState<'Multi' | 'Environmental Services' | 'Roofing' | null>(null);
   const [vcrPopup, setVcrPopup]               = useState<{ result: SearchResult | null; loading: boolean; open: boolean }>({ result: null, loading: false, open: false });
-
-  // ── AI Analysis State ──────────────────────────────────────────────────────
   const [aiAnalysis, setAiAnalysis]           = useState<AIAnalysisResult | null>(null);
   const [aiLoading, setAiLoading]             = useState(false);
   const [aiError, setAiError]                 = useState("");
-
-  // ── Sort State ─────────────────────────────────────────────────────────────
+  const [aiAnalysisFilter, setAiAnalysisFilter] = useState<"all" | "red" | "amber" | "green">("all");
   const [submittedSort, setSubmittedSort]     = useState<{ key: string; order: 'asc' | 'desc' }>({ key: 'latestVcrDate', order: 'desc' });
   const [notSubmittedSort, setNotSubmittedSort] = useState<{ key: string; order: 'asc' | 'desc' }>({ key: 'vanName', order: 'asc' });
 
-  const handleSubmittedSort = (key: string) => {
-    setSubmittedSort(prev => ({
-      key,
-      order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc'
-    }));
-  };
+  const handleSubmittedSort = (key: string) => setSubmittedSort(prev => ({ key, order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc' }));
+  const handleNotSubmittedSort = (key: string) => setNotSubmittedSort(prev => ({ key, order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc' }));
 
-  const handleNotSubmittedSort = (key: string) => {
-    setNotSubmittedSort(prev => ({
-      key,
-      order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc'
-    }));
-  };
+  const { userTrade, showsAllTrades } = useUserTrade();
 
-  const { userTrade, userName, showsAllTrades, canViewTrade } = useUserTrade();
-
-  // ── Load engineer trades from Salesforce ServiceResource ──────────────────
   const loadEngineerTrades = async () => {
     try {
       const res = await fetch('/api/vehicle-condition/engineers');
       if (!res.ok) throw new Error(`Failed to load engineers: ${res.status}`);
       const data = await res.json();
-      const trades: Record<string, string> = {};
-      const engineersList: Array<{ name: string; trade: string }> = data.engineers || [];
-      console.log(`[ENGINEERS_LOAD] Loaded ${engineersList.length} engineers from backend`);
-      engineersList.forEach((engineer, idx) => {
-        const name = (engineer.name || '').trim();
-        const trade = (engineer.trade || '').trim();
+      const trades:    Record<string, string> = {};
+      const rawTrades: Record<string, string> = {};
+      const engineersList: Array<{ name: string; trade: string; rawTrade?: string }> = data.engineers || [];
+      engineersList.forEach((engineer) => {
+        const name     = (engineer.name     || '').trim();
+        const trade    = (engineer.trade    || '').trim();
+        const rawTrade = (engineer.rawTrade || '').trim();
         if (name && trade) {
-          const cleanName = name.split('(')[0].split('+')[0].trim();
+          const cleanName   = name.split('(')[0].split('+')[0].trim();
           const mappedTrade = getTradeGroup(trade);
-          trades[cleanName] = mappedTrade;
-          trades[name] = mappedTrade;
-          if (idx < 5) console.log(`[ENGINEERS_LOAD] Engineer ${idx}: "${name}" -> Trade: "${trade}" -> Mapped: "${mappedTrade}"`);
+          trades[cleanName]    = mappedTrade;
+          trades[name]         = mappedTrade;
+          rawTrades[cleanName] = rawTrade;
+          rawTrades[name]      = rawTrade;
         }
       });
-      console.log(`[ENGINEERS_LOAD] ✓ Processed trades for ${Object.keys(trades).length} engineer entries`);
       setEngineerTrades(trades);
+      setEngineerRawTrades(rawTrades);
     } catch (e) {
       console.error("Failed to load engineer trades:", e);
     }
   };
 
-  // ── Load dashboard ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (userTrade && userTrade !== 'ALL') {
-      setTradeGroupFilter(userTrade);
-    }
+    if (userTrade && userTrade !== 'ALL') setTradeGroupFilter(userTrade);
     loadDashboard();
     loadEngineerTrades();
   }, [userTrade]);
@@ -571,7 +456,6 @@ const VehicleConditionDashboard: React.FC = () => {
     }
   };
 
-  // ── Search handler ─────────────────────────────────────────────────────────
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const term = searchTerm.trim();
@@ -592,11 +476,11 @@ const VehicleConditionDashboard: React.FC = () => {
     }
   };
 
-  // ── AI Analysis fetch ──────────────────────────────────────────────────────
   const fetchAiAnalysis = async (formId: string) => {
     setAiAnalysis(null);
     setAiError("");
     setAiLoading(true);
+    setAiAnalysisFilter("all");
     try {
       const res = await fetch(`${API_BASE}/ai-analyse/${formId}`);
       if (!res.ok) throw new Error(`AI analysis failed: ${res.status}`);
@@ -609,12 +493,11 @@ const VehicleConditionDashboard: React.FC = () => {
     }
   };
 
-  // ── VCR popup fetch ────────────────────────────────────────────────────────
   const fetchVcrForVehicle = async (vanName: string) => {
-    // Reset AI state every time a new popup opens
     setAiAnalysis(null);
     setAiError("");
     setAiLoading(false);
+    setAiAnalysisFilter("all");
     setVcrPopup({ result: null, loading: true, open: true });
     try {
       const res = await fetch(`${API_BASE}/compliance/search/${encodeURIComponent(vanName)}`);
@@ -626,38 +509,104 @@ const VehicleConditionDashboard: React.FC = () => {
     }
   };
 
-  // ── Derived values ─────────────────────────────────────────────────────────
   const toDateStr = (d: Date) => d.toISOString().split('T')[0];
   const todayStr = toDateStr(new Date());
   const yesterdayDate = new Date(); yesterdayDate.setDate(yesterdayDate.getDate() - 1);
   const yesterdayStr = toDateStr(yesterdayDate);
   const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  const enrichWithTrades = <T extends { engineerName: string; trade?: string }>(items: T[]): (T & { tradeGroup?: string })[] => {
-    return items.map((item, idx) => {
-      // Prefer the trade field from the API (Trade_Lookup__c from Salesforce directly)
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Sub-group classification for Lee's 3 buttons.
+  // Works off tradeGroup (mapped category) + rawTrade/trade (raw SF value).
+  // The backend sends:
+  //   trade    → mapped category e.g. "Building Fabric"
+  //   rawTrade → original SF value e.g. "Carpentry" (may be absent / same as trade)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const ENV_RAW_TRADES_LC = new Set([
+    'environmental services', 'pest control', 'pest proofing',
+    'sanitisation', 'sanitisation & specialist cleaning',
+    'waste clearance', 'rubbish removal', 'gardening',
+  ]);
+
+  const getLeeSubGroup = (v: { trade?: string; rawTrade?: string; tradeGroup?: string }): 'Roofing' | 'Environmental Services' | 'Multi' | null => {
+    const tg = v.tradeGroup || '';
+    const isBF  = tg === 'Building Fabric';
+    const isEnv = tg === 'Environmental Services';
+    if (!isBF && !isEnv) return null;
+
+    // Use rawTrade first (original SF value), fall back to trade field
+    const rawLower   = (v.rawTrade || '').toLowerCase().trim();
+    const tradeLower = (v.trade    || '').toLowerCase().trim();
+    const check      = rawLower || tradeLower;
+
+    if (check.includes('roofing'))        return 'Roofing';
+    if (isEnv || ENV_RAW_TRADES_LC.has(check)) return 'Environmental Services';
+    if (isBF) return 'Multi';   // Decoration, Carpentry, General Builders, Building Fabric, etc.
+    return null;
+  };
+
+  const enrichWithTrades = <T extends { engineerName: string; trade?: string; rawTrade?: string }>(items: T[]): (T & { tradeGroup?: string; displayGroup?: string })[] => {
+    return items.map((item) => {
+      let tradeGroup: string;
       if (item.trade && item.trade.trim() !== '') {
-        const mappedTrade = getTradeGroup(item.trade);
-        if (idx < 5) console.log(`[TRADE_ENRICH] Item ${idx}: Engineer="${item.engineerName}" Trade="${item.trade}" => "${mappedTrade}"`);
-        return { ...item, tradeGroup: mappedTrade };
+        tradeGroup = getTradeGroup(item.trade);
+      } else {
+        const fullName  = item.engineerName;
+        const cleanName = fullName.split('(')[0].split('+')[0].trim();
+        tradeGroup =
+          engineerTrades[cleanName] ||
+          engineerTrades[fullName.trim()] ||
+          engineerTrades[fullName] ||
+          Object.entries(engineerTrades).find(([key]) => key.toLowerCase() === cleanName.toLowerCase())?.[1] ||
+          'N/A';
       }
-      // Fallback: name-based lookup from the engineers endpoint
-      const fullName = item.engineerName;
+
+      // Resolve rawTrade: use item.rawTrade if present, else look up from engineerRawTrades
+      // This is the key fix — the dashboard endpoint sends rawTrade on each vehicle record,
+      // but the engineers endpoint previously didn't. Now it does, and we store it above.
+      const fullName  = item.engineerName;
       const cleanName = fullName.split('(')[0].split('+')[0].trim();
-      const tradeGroup =
-        engineerTrades[cleanName] ||
-        engineerTrades[fullName.trim()] ||
-        engineerTrades[fullName] ||
-        Object.entries(engineerTrades).find(([key]) => key.toLowerCase() === cleanName.toLowerCase())?.[1] ||
-        'N/A';
-      if (idx < 5) console.log(`[TRADE_ENRICH_FALLBACK] Item ${idx}: Engineer="${item.engineerName}" => "${tradeGroup}"`);
-      return { ...item, tradeGroup };
+      const resolvedRawTrade =
+        (item.rawTrade && item.rawTrade.trim() !== '')
+          ? item.rawTrade
+          : engineerRawTrades[cleanName] ||
+            engineerRawTrades[fullName.trim()] ||
+            engineerRawTrades[fullName] ||
+            Object.entries(engineerRawTrades).find(([key]) => key.toLowerCase() === cleanName.toLowerCase())?.[1] ||
+            item.trade || '';
+
+      const enriched = { ...item, rawTrade: resolvedRawTrade, tradeGroup };
+      const sub          = getLeeSubGroup(enriched);
+      const displayGroup = sub ?? tradeGroup;
+      return { ...enriched, displayGroup };
     });
   };
 
-  const enrichedSubmitted    = enrichWithTrades(dashboard?.submitted    || []);
-  const enrichedNotSubmitted = enrichWithTrades(dashboard?.notSubmitted || []);
+  const enrichedSubmitted    = enrichWithTrades(dashboard?.submitted    || []).filter(v => !isExcludedTrade(v.trade) && !isExcludedTrade(v.tradeGroup));
+  const enrichedNotSubmitted = enrichWithTrades(dashboard?.notSubmitted || []).filter(v => !isExcludedTrade(v.trade) && !isExcludedTrade(v.tradeGroup));
   const actualTradeFilter    = !showsAllTrades() ? userTrade : tradeGroupFilter;
+
+  const userEmail = (() => { try { const d = JSON.parse(sessionStorage.getItem('user_data') || '{}'); return (d.email || '').toLowerCase().trim(); } catch { return ''; } })();
+  const userAllowedTrades = userEmail ? (RESTRICTED_USERS[userEmail] || null) : null;
+
+  const userAllowedCategories = userAllowedTrades
+    ? [...new Set(userAllowedTrades.map(t => getTradeGroup(t)))].filter(c => c && c !== 'N/A' && c !== 'EXCLUDED')
+    : null;
+
+  const isLeeView =
+    !!userAllowedCategories &&
+    userAllowedCategories.includes('Building Fabric') &&
+    userAllowedCategories.includes('Environmental Services');
+
+  const matchesTrade = (v: { trade?: string; rawTrade?: string; tradeGroup?: string; displayGroup?: string }): boolean => {
+    if (isLeeView || actualTradeFilter === 'Building Fabric & Environmental') {
+      const sub = getLeeSubGroup(v);
+      if (sub === null)   return false;   // not a Lee trade
+      if (!leeSubFilter)  return true;    // no button active → all Lee trades
+      return sub === leeSubFilter;        // button active → exact sub-group match
+    }
+    return !actualTradeFilter || v.tradeGroup === actualTradeFilter;
+  };
 
   const filteredSubmitted = enrichedSubmitted
     .filter((v) => {
@@ -669,11 +618,14 @@ const VehicleConditionDashboard: React.FC = () => {
       if (filterMode === '7days')     return new Date(v.latestVcrDate) >= sevenDaysAgo;
       return true;
     })
-    .filter(v => !actualTradeFilter || v.tradeGroup === actualTradeFilter);
+    .filter(matchesTrade);
 
-  const filteredNotSubmitted = enrichedNotSubmitted.filter(v => !actualTradeFilter || v.tradeGroup === actualTradeFilter);
-  const isFiltered           = !!(filterMode || filterDate || actualTradeFilter);
-  const totalAllocatedForUser = (actualTradeFilter || !showsAllTrades()) ? (filteredSubmitted.length + filteredNotSubmitted.length) : (dashboard?.totalAllocated || 0);
+  const filteredNotSubmitted = enrichedNotSubmitted.filter(matchesTrade);
+  const isFiltered           = !!(filterMode || filterDate || actualTradeFilter || leeSubFilter);
+  const allUniqueEngineers = new Set([...enrichedSubmitted, ...enrichedNotSubmitted].map(v => v.engineerName)).size;
+  const totalAllocatedForUser = (isLeeView || actualTradeFilter || !showsAllTrades())
+    ? new Set([...filteredSubmitted, ...filteredNotSubmitted].map(v => v.engineerName)).size
+    : allUniqueEngineers;
   const displaySubmittedCount    = filteredSubmitted.length;
   const displayNotSubmittedCount = filteredNotSubmitted.length;
 
@@ -690,24 +642,23 @@ const VehicleConditionDashboard: React.FC = () => {
     filterMode === '7days' ? 'Not submitted in 7 days' : 'Overdue or never submitted';
 
   const submittedColumns: TableColumn[] = [
-    { key: "vanName",      label: "Van Number",  width: "12%", sortable: true },
-    { key: "engineerName", label: "Engineer",    width: "18%", sortable: true },
-    { key: "tradeGroup",   label: "Trade Group", width: "18%", sortable: true },
-    { key: "latestVcrDate",label: "Last Report", width: "15%", sortable: true },
-    { key: "daysSince",    label: "Days Since",  width: "12%", sortable: true },
-    { key: "status",       label: "Status",      width: "12%", sortable: true },
+    { key: "vanName",       label: "Van Number",  width: "12%", sortable: true },
+    { key: "engineerName",  label: "Engineer",    width: "18%", sortable: true },
+    { key: "displayGroup",  label: "Trade Group", width: "18%", sortable: true },
+    { key: "latestVcrDate", label: "Last Report", width: "15%", sortable: true },
+    { key: "daysSince",     label: "Days Since",  width: "12%", sortable: true },
+    { key: "status",        label: "Status",      width: "12%", sortable: true },
   ];
 
   const notSubmittedColumns: TableColumn[] = [
-    { key: "vanName",      label: "Van Number",   width: "12%", sortable: true },
-    { key: "engineerName", label: "Engineer",     width: "18%", sortable: true },
-    { key: "tradeGroup",   label: "Trade Group",  width: "18%", sortable: true },
-    { key: "latestVcrDate",label: "Last Report",  width: "15%", sortable: true },
-    { key: "daysSince",    label: "Days Overdue", width: "12%", sortable: true },
-    { key: "status",       label: "Status",       width: "12%", sortable: true },
+    { key: "vanName",       label: "Van Number",   width: "12%", sortable: true },
+    { key: "engineerName",  label: "Engineer",     width: "18%", sortable: true },
+    { key: "displayGroup",  label: "Trade Group",  width: "18%", sortable: true },
+    { key: "latestVcrDate", label: "Last Report",  width: "15%", sortable: true },
+    { key: "daysSince",     label: "Days Overdue", width: "12%", sortable: true },
+    { key: "status",        label: "Status",       width: "12%", sortable: true },
   ];
 
-  // ── Loading screen ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: FONT }}>
@@ -719,37 +670,25 @@ const VehicleConditionDashboard: React.FC = () => {
     );
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ fontFamily: FONT, background: C.gray.surface, minHeight: "100vh", paddingBottom: "40px" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* ── Header ── */}
-      <div style={{
-        backgroundImage: "url('/London_Skyliner.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        borderBottom: `1px solid ${C.border.subtle}`,
-        padding: "40px 20px",
-        marginBottom: "32px",
-        position: "relative",
-      }}>
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "rgba(23, 50, 94, 0.55)",
-          borderBottom: `1px solid ${C.border.subtle}`,
-        }} />
+      <div style={{ backgroundImage: "url('/London_Skyliner.png')", backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", borderBottom: `1px solid ${C.border.subtle}`, padding: "40px 20px", marginBottom: "32px", position: "relative" }}>
+        <div style={{ position: "absolute", inset: 0, background: "rgba(23, 50, 94, 0.55)", borderBottom: `1px solid ${C.border.subtle}` }} />
         <div style={{ maxWidth: "1400px", margin: "0 auto", position: "relative", zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
             <div>
               <h1 style={{ fontSize: "28px", fontWeight: 700, color: "#FFFFFF", margin: "0 0 8px 0" }}>Chumey Vehicle Condition Report</h1>
               <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.75)", margin: 0 }}>VCR Compliance Dashboard • As of {dashboard?.asOfDate}</p>
             </div>
-            {!showsAllTrades() && (
+            {(!showsAllTrades() || !!userAllowedCategories || isLeeView) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: `${C.warning.default}15`, border: `1.5px solid ${C.warning.default}`, whiteSpace: 'nowrap' }}>
                 <Lock style={{ width: 16, height: 16, color: C.warning.default }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.warning.default, fontFamily: FONT }}>Viewing {userTrade} only</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.warning.default, fontFamily: FONT }}>
+                  Viewing {isLeeView ? (leeSubFilter ? `Lee's ${leeSubFilter}` : "Lee's Portfolio") : userAllowedCategories ? userAllowedCategories.join(' & ') : userTrade} only
+                </span>
               </div>
             )}
           </div>
@@ -819,9 +758,10 @@ const VehicleConditionDashboard: React.FC = () => {
             </div>
           )}
         </div>
+
         {/* ── KPI Cards ── */}
         <div style={{ display: "flex", gap: "16px", marginBottom: "40px", flexWrap: "wrap" }}>
-          <KPICard label="Total Active Engineers for Trade  " value={totalAllocatedForUser} subtext={!showsAllTrades() ? `${userTrade} trade only` : ""} color="blue" icon="" />
+          <KPICard label="Total Active Engineers for Trade" value={totalAllocatedForUser} subtext={isLeeView ? (leeSubFilter ? `${leeSubFilter} only` : "Lee's Portfolio") : !showsAllTrades() ? `${userAllowedCategories ? userAllowedCategories.join(' & ') : userTrade} only` : ""} color="blue" icon="" />
           <KPICard label="SUBMITTED"     value={displaySubmittedCount}    subtext={displaySubmittedSubtext}    color="green" icon="✓" onClick={() => setModalOpen("submitted")} />
           <KPICard label="NOT SUBMITTED" value={displayNotSubmittedCount} subtext={displayNotSubmittedSubtext} color="red"   icon="✗" onClick={() => setModalOpen("notSubmitted")} />
         </div>
@@ -829,7 +769,6 @@ const VehicleConditionDashboard: React.FC = () => {
         {/* ── Date / Trade Filter Bar ── */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", background: "#FFFFFF", padding: "16px 20px", borderRadius: "12px", border: `1px solid ${C.border.subtle}`, flexWrap: "wrap" }}>
           <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Filter by Date</span>
-
           {([{ key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: '7days', label: 'Last 7 Days' }] as const).map(({ key, label }) => {
             const active = filterMode === key && !filterDate;
             return (
@@ -840,22 +779,33 @@ const VehicleConditionDashboard: React.FC = () => {
               </button>
             );
           })}
-
           <span style={{ color: C.gray.disabled, fontSize: "13px" }}>|</span>
-
           <input type="date" value={filterDate}
             onChange={(e) => { setFilterDate(e.target.value); setFilterMode(null); }}
             style={{ padding: "8px 12px", borderRadius: "8px", border: `1px solid ${filterDate ? C.primary.default : C.border.subtle}`, fontSize: "13px", fontFamily: FONT, outline: "none", color: C.text.body, cursor: "pointer" }}
             onFocus={(e) => ((e.target as HTMLInputElement).style.borderColor = C.primary.default)}
             onBlur={(e)  => ((e.target as HTMLInputElement).style.borderColor = filterDate ? C.primary.default : C.border.subtle)}
           />
-
           <span style={{ color: C.gray.disabled, fontSize: "13px" }}>|</span>
-
-          {showsAllTrades() && (
+          {(isLeeView || actualTradeFilter === 'Building Fabric & Environmental') && (
+            <>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>View</span>
+              {(['Multi', 'Roofing', 'Environmental Services'] as const).map((group) => {
+                const active = leeSubFilter === group;
+                return (
+                  <button key={group} onClick={() => setLeeSubFilter(active ? null : group)}
+                    style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${active ? C.primary.default : C.border.subtle}`, background: active ? C.primary.default : C.gray.negative, color: active ? "#FFFFFF" : C.gray.subtle, fontSize: "13px", fontWeight: 700, fontFamily: FONT, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                  >
+                    {group}
+                  </button>
+                );
+              })}
+            </>
+          )}
+          {!isLeeView && showsAllTrades() && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Trade Group</span>
-              <select value={tradeGroupFilter} onChange={(e) => setTradeGroupFilter(e.target.value)}
+              <select value={tradeGroupFilter} onChange={(e) => { setTradeGroupFilter(e.target.value); if (e.target.value !== 'Building Fabric & Environmental') setLeeSubFilter(null); }}
                 style={{ padding: "8px 12px", borderRadius: "8px", border: `1px solid ${tradeGroupFilter ? C.primary.default : C.border.subtle}`, fontSize: "13px", fontFamily: FONT, outline: "none", color: tradeGroupFilter ? C.primary.default : C.gray.subtle, fontWeight: tradeGroupFilter ? 700 : 400, background: tradeGroupFilter ? C.surface.primarySubtle : C.gray.negative, cursor: "pointer", minWidth: "160px" }}
               >
                 <option value="">All Trade Groups</option>
@@ -863,18 +813,16 @@ const VehicleConditionDashboard: React.FC = () => {
               </select>
             </>
           )}
-
-          {(isFiltered || tradeGroupFilter) && (
-            <button onClick={() => { setFilterMode(null); setFilterDate(""); setTradeGroupFilter(""); }}
+          {(filterMode || filterDate || leeSubFilter) && (
+            <button onClick={() => { setFilterMode(null); setFilterDate(""); setTradeGroupFilter(""); setLeeSubFilter(null); }}
               style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${C.border.subtle}`, background: C.gray.negative, fontSize: "12px", fontWeight: 600, color: C.gray.subtle, cursor: "pointer", fontFamily: FONT }}
             >
               Clear ✕
             </button>
           )}
-
           {(isFiltered || actualTradeFilter) && (
             <span style={{ fontSize: "12px", color: C.gray.caption }}>
-              {filteredSubmitted.length} submitted · {filteredNotSubmitted.length} not submitted{actualTradeFilter ? ` · ${actualTradeFilter}` : ""}
+              {filteredSubmitted.length} submitted · {filteredNotSubmitted.length} not submitted{isLeeView && leeSubFilter ? ` · ${leeSubFilter}` : userAllowedCategories ? ` · ${userAllowedCategories.join(' & ')}` : actualTradeFilter ? ` · ${actualTradeFilter}` : ""}
             </span>
           )}
         </div>
@@ -926,10 +874,8 @@ const VehicleConditionDashboard: React.FC = () => {
                 </div>
               ) : vcrPopup.result ? (
                 <>
-                  {/* Vehicle name */}
                   <h3 style={{ fontSize: "16px", fontWeight: 700, color: C.text.title, marginBottom: "16px" }}>{vcrPopup.result.vehicle}</h3>
 
-                  {/* Latest VCR info card */}
                   {vcrPopup.result.latestVcr ? (
                     <div style={{ padding: "14px 16px", borderRadius: "10px", background: C.surface.successSubtle, border: `1px solid ${C.border.primary}`, marginBottom: "20px" }}>
                       <p style={{ fontSize: "11px", fontWeight: 700, color: C.success.default, margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: "0.5px" }}>Latest Report</p>
@@ -943,7 +889,6 @@ const VehicleConditionDashboard: React.FC = () => {
                     <p style={{ fontSize: "13px", color: C.gray.caption, marginBottom: "16px" }}>No VCR report found</p>
                   )}
 
-                  {/* Images grid */}
                   {vcrPopup.result.images.length > 0 ? (
                     <>
                       <p style={{ fontSize: "13px", fontWeight: 600, color: C.gray.subtle, marginBottom: "12px" }}>Attached Images ({vcrPopup.result.images.length})</p>
@@ -969,7 +914,6 @@ const VehicleConditionDashboard: React.FC = () => {
                   {vcrPopup.result.latestVcr && vcrPopup.result.images.length > 0 && (
                     <div style={{ marginTop: "24px", borderTop: `1px solid ${C.border.subtle}`, paddingTop: "20px" }}>
 
-                      {/* Analyse button — only shown before analysis runs */}
                       {!aiAnalysis && !aiLoading && (
                         <button
                           onClick={() => fetchAiAnalysis(vcrPopup.result!.latestVcr!.id)}
@@ -981,7 +925,6 @@ const VehicleConditionDashboard: React.FC = () => {
                         </button>
                       )}
 
-                      {/* Loading */}
                       {aiLoading && (
                         <div style={{ textAlign: "center", padding: "32px", background: C.surface.primarySubtle, borderRadius: "10px", border: `1px solid ${C.border.primary}` }}>
                           <div style={{ width: "36px", height: "36px", borderRadius: "50%", border: `3px solid ${C.border.subtle}`, borderTop: `3px solid ${C.primary.default}`, animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
@@ -990,14 +933,12 @@ const VehicleConditionDashboard: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Error */}
                       {aiError && (
                         <div style={{ padding: "14px 16px", background: C.surface.errorSubtle, border: `1px solid ${C.border.error}`, borderRadius: "10px", color: C.error.default, fontSize: "13px", fontWeight: 500 }}>
                           ⚠️ {aiError}
                         </div>
                       )}
 
-                      {/* AI Results */}
                       {aiAnalysis && (
                         <div>
                           {/* Overall status banner */}
@@ -1022,106 +963,107 @@ const VehicleConditionDashboard: React.FC = () => {
                           </div>
 
                           {/* Per-image report cards */}
-                          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                            {aiAnalysis.reports.map((report, idx) => {
-                              const condColor =
-                                report.overall_condition === "GREEN" ? C.success.default :
-                                report.overall_condition === "RED"   ? C.error.default   : C.warning.default;
-                              const condLabel =
-                                report.overall_condition === "GREEN" ? "✓  Good Condition" :
-                                report.overall_condition === "RED"   ? "✗  Action Needed"  : "⚠  Needs Monitoring";
-                              const actionIsNone = !report.action_required || report.action_required === "None";
-                              const tags = [
-                                report.damage_detected ? { text: "Damage", color: C.error.default } : null,
-                                report.cleanliness && report.cleanliness !== "Clean" ? { text: report.cleanliness, color: C.warning.default } : null,
-                                report.tyres_visible && report.tyre_condition && report.tyre_condition !== "Good" && report.tyre_condition !== "Not Visible" ? { text: `Tyres: ${report.tyre_condition}`, color: C.warning.default } : null,
-                                report.lights_condition && report.lights_condition === "Damaged" ? { text: "Lights Damaged", color: C.error.default } : null,
-                              ].filter(Boolean) as { text: string; color: string }[];
+                          <div style={{ marginTop: "20px" }}>
+                            {/* Filter buttons */}
+                            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+                              {(["all", "red", "amber", "green"] as const).map((f) => {
+                                const labels: Record<string, string> = {
+                                  all:   `All (${aiAnalysis.reports.length})`,
+                                  red:   `✗ Action Needed (${aiAnalysis.reports.filter(r => r.overall_condition === "RED").length})`,
+                                  amber: `⚠ Needs Monitoring (${aiAnalysis.reports.filter(r => r.overall_condition === "AMBER").length})`,
+                                  green: `✓ Good Condition (${aiAnalysis.reports.filter(r => r.overall_condition === "GREEN").length})`,
+                                };
+                                const activeBg: Record<string, string> = {
+                                  all:   C.primary.default,
+                                  red:   C.error.default,
+                                  amber: C.warning.default,
+                                  green: C.success.default,
+                                };
+                                const isActive = aiAnalysisFilter === f;
+                                return (
+                                  <button key={f} onClick={() => setAiAnalysisFilter(f)}
+                                    style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: isActive ? activeBg[f] : C.gray.negative, color: isActive ? "#FFFFFF" : C.text.body, fontSize: "12px", fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}
+                                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.85"; }}
+                                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+                                  >
+                                    {labels[f]}
+                                  </button>
+                                );
+                              })}
+                            </div>
 
-                              return (
-                                <div 
-                                  key={idx}
-                                  onClick={() => {
-                                    // Find matching image from VCR popup results
-                                    if (vcrPopup.result?.images) {
-                                      const matchingImage = vcrPopup.result.images.find(img => 
-                                        img.title.includes(report.image_title) || report.image_title.includes(img.title)
-                                      );
-                                      if (matchingImage) {
-                                        setLightboxImage(matchingImage.imageUrl);
-                                        setLightboxTitle(report.image_title);
-                                      }
-                                    }
-                                  }}
-                                  style={{ 
-                                    borderRadius: "12px", 
-                                    background: "#FFFFFF", 
-                                    overflow: "hidden", 
-                                    boxShadow: "0 2px 12px rgba(0,0,0,0.07)", 
-                                    display: "flex",
-                                    cursor: "pointer",
-                                    transition: "all 0.2s ease",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.12)";
-                                    (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.07)";
-                                    (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-                                  }}
-                                >
+                            {/* Filtered report cards */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                              {aiAnalysis.reports
+                                .filter(report => aiAnalysisFilter === "all" || report.overall_condition === aiAnalysisFilter.toUpperCase())
+                                .map((report, idx) => {
+                                  const condColor =
+                                    report.overall_condition === "GREEN" ? C.success.default :
+                                    report.overall_condition === "RED"   ? C.error.default   : C.warning.default;
+                                  const condLabel =
+                                    report.overall_condition === "GREEN" ? "✓  Good Condition" :
+                                    report.overall_condition === "RED"   ? "✗  Action Needed"  : "⚠  Needs Monitoring";
+                                  const actionIsNone = !report.action_required || report.action_required === "None";
+                                  const tags = [
+                                    report.damage_detected ? { text: "Damage", color: C.error.default } : null,
+                                    report.cleanliness && report.cleanliness !== "Clean" ? { text: report.cleanliness, color: C.warning.default } : null,
+                                    report.tyres_visible && report.tyre_condition && report.tyre_condition !== "Good" && report.tyre_condition !== "Not Visible" ? { text: `Tyres: ${report.tyre_condition}`, color: C.warning.default } : null,
+                                    report.lights_condition && report.lights_condition === "Damaged" ? { text: "Lights Damaged", color: C.error.default } : null,
+                                  ].filter(Boolean) as { text: string; color: string }[];
 
-                                  {/* Left colour bar */}
-                                  <div style={{ width: "6px", flexShrink: 0, background: condColor }} />
+                                  const matchingImage = vcrPopup.result?.images?.find(img =>
+                                    img.title.includes(report.image_title) || report.image_title.includes(img.title)
+                                  );
 
-                                  {/* Card content */}
-                                  <div style={{ flex: 1, padding: "16px 18px" }}>
-
-                                    {/* Top row: image name + condition badge */}
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "6px" }}>
-                                      <div>
-                                        <p style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: C.text.title }}>📸 {report.image_title}</p>
-                                        <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: C.gray.caption }}>{report.area_captured}</p>
-                                      </div>
-                                      <span style={{ padding: "5px 14px", borderRadius: "20px", background: condColor, color: "#FFF", fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>
-                                        {condLabel}
-                                      </span>
-                                    </div>
-
-                                    {/* Inspector notes — the main readable summary */}
-                                    <p style={{ margin: "10px 0", fontSize: "13px", color: C.text.body, lineHeight: 1.65 }}>
-                                      {report.inspector_notes}
-                                    </p>
-
-                                    {/* Bottom row: issue tags + action pill */}
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${C.border.subtle}` }}>
-                                      {tags.length > 0 ? tags.map((tag) => (
-                                        <span key={tag.text} style={{ padding: "3px 10px", borderRadius: "20px", background: `${tag.color}15`, color: tag.color, fontSize: "11px", fontWeight: 700, border: `1px solid ${tag.color}30` }}>
-                                          {tag.text}
-                                        </span>
-                                      )) : (
-                                        <span style={{ padding: "3px 10px", borderRadius: "20px", background: C.surface.successSubtle, color: C.success.default, fontSize: "11px", fontWeight: 700, border: `1px solid #A8D5BA` }}>
-                                          No Issues Found
-                                        </span>
+                                  return (
+                                    <div
+                                      key={idx}
+                                      style={{ borderRadius: "12px", background: "#FFFFFF", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", display: "flex", transition: "all 0.2s ease", minHeight: "180px" }}
+                                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.12)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
+                                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.07)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"; }}
+                                    >
+                                      {matchingImage && (
+                                        <div
+                                          role="button" tabIndex={0}
+                                          onClick={() => { setLightboxImage(matchingImage.imageUrl); setLightboxTitle(report.image_title); }}
+                                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setLightboxImage(matchingImage.imageUrl); setLightboxTitle(report.image_title); } }}
+                                          style={{ width: "160px", minWidth: "160px", height: "100%", background: C.gray.negative, overflow: "hidden", cursor: "pointer" }}
+                                        >
+                                          <img src={matchingImage.imageUrl} alt={report.image_title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        </div>
                                       )}
-                                      <span style={{ marginLeft: "auto", padding: "3px 12px", borderRadius: "20px", fontSize: "11px", fontWeight: 700,
-                                        background: actionIsNone ? C.surface.successSubtle : C.surface.errorSubtle,
-                                        color: actionIsNone ? C.success.default : C.error.default,
-                                        border: `1px solid ${actionIsNone ? "#A8D5BA" : C.border.error}`,
-                                      }}>
-                                        {actionIsNone ? "✓ No Action Required" : `⚠ ${report.action_required}`}
-                                      </span>
+                                      <div style={{ width: "6px", flexShrink: 0, background: condColor }} />
+                                      <div style={{ flex: 1, padding: "16px 18px" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "6px" }}>
+                                          <span style={{ padding: "5px 14px", borderRadius: "20px", background: condColor, color: "#FFF", fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>
+                                            {condLabel}
+                                          </span>
+                                        </div>
+                                        <p style={{ margin: "10px 0", fontSize: "13px", color: C.text.body, lineHeight: 1.65 }}>{report.inspector_notes}</p>
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${C.border.subtle}` }}>
+                                          {tags.length > 0 ? tags.map((tag) => (
+                                            <span key={tag.text} style={{ padding: "3px 10px", borderRadius: "20px", background: `${tag.color}15`, color: tag.color, fontSize: "11px", fontWeight: 700, border: `1px solid ${tag.color}30` }}>
+                                              {tag.text}
+                                            </span>
+                                          )) : (
+                                            <span style={{ padding: "3px 10px", borderRadius: "20px", background: C.surface.successSubtle, color: C.success.default, fontSize: "11px", fontWeight: 700, border: `1px solid #A8D5BA` }}>
+                                              No Issues Found
+                                            </span>
+                                          )}
+                                          <span style={{ marginLeft: "auto", padding: "3px 12px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, background: actionIsNone ? C.surface.successSubtle : C.surface.errorSubtle, color: actionIsNone ? C.success.default : C.error.default, border: `1px solid ${actionIsNone ? "#A8D5BA" : C.border.error}` }}>
+                                            {actionIsNone ? "✓ No Action Required" : `⚠ ${report.action_required}`}
+                                          </span>
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                  );
+                                })}
+                            </div>
                           </div>
 
                           {/* Reset button */}
                           <button
-                            onClick={() => { setAiAnalysis(null); setAiError(""); }}
+                            onClick={() => { setAiAnalysis(null); setAiError(""); setAiAnalysisFilter("all"); }}
                             style={{ marginTop: "16px", width: "100%", padding: "10px", borderRadius: "8px", border: `1px solid ${C.border.subtle}`, background: C.gray.negative, color: C.gray.subtle, fontSize: "12px", fontWeight: 600, fontFamily: FONT, cursor: "pointer" }}
                           >
                             ↺ Reset Analysis
@@ -1141,8 +1083,8 @@ const VehicleConditionDashboard: React.FC = () => {
       <Lightbox image={lightboxImage} title={lightboxTitle} onClose={() => setLightboxImage(null)} />
 
       {/* ── KPI Modals ── */}
-      <ListModal isOpen={modalOpen === "submitted"}    title="✓ SUBMITTED"    data={enrichWithTrades(dashboard?.submitted    || [])} columns={submittedColumns}    onClose={() => setModalOpen(null)} color="green" />
-      <ListModal isOpen={modalOpen === "notSubmitted"} title="✗ NOT SUBMITTED" data={enrichedNotSubmitted}                           columns={notSubmittedColumns} onClose={() => setModalOpen(null)} color="red"   />
+      <ListModal isOpen={modalOpen === "submitted"}    title="✓ SUBMITTED"    data={filteredSubmitted}    columns={submittedColumns}    onClose={() => setModalOpen(null)} color="green" />
+      <ListModal isOpen={modalOpen === "notSubmitted"} title="✗ NOT SUBMITTED" data={filteredNotSubmitted}  columns={notSubmittedColumns} onClose={() => setModalOpen(null)} color="red"   />
     </div>
   );
 };

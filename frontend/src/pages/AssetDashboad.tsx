@@ -50,20 +50,20 @@ const FONT = "'Mont', sans-serif";
 
 // ── Mont @font-face injection — call once at module level ─────────────────────
 const MONT_CSS = `
-  @font-face { font-family:'Mont'; src:url('/fonts/MontHeavy/MontHeavy.otf') format('opentype');                   font-weight:900; font-style:normal; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontHeavyItalic/MontHeavyItalic.otf') format('opentype');       font-weight:900; font-style:italic; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontBlack/MontBlack.otf') format('opentype');                   font-weight:950; font-style:normal; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontBold/MontBold.otf') format('opentype');                     font-weight:700; font-style:normal; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontBoldItalic/MontBoldItalic.otf') format('opentype');         font-weight:700; font-style:italic; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontSemiBold/MontSemiBold.otf') format('opentype');             font-weight:600; font-style:normal; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontSemiBoldItalic/MontSemiBoldItalic.otf') format('opentype'); font-weight:600; font-style:italic; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontRegular/MontRegular.otf') format('opentype');               font-weight:400; font-style:normal; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontRegularItalic/MontRegularItalic.otf') format('opentype');   font-weight:400; font-style:italic; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontBook/MontBook.otf') format('opentype');                     font-weight:350; font-style:normal; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontLight/MontLight.otf') format('opentype');                   font-weight:300; font-style:normal; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontLightItalic/MontLightItalic.otf') format('opentype');       font-weight:300; font-style:italic; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontThin/MontThin.otf') format('opentype');                     font-weight:100; font-style:normal; }
-  @font-face { font-family:'Mont'; src:url('/fonts/MontThinItalic/MontThinItalic.otf') format('opentype');         font-weight:100; font-style:italic; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontHeavy/MontHeavy.woff2') format('woff2'), url('/fonts/MontHeavy/MontHeavy.woff') format('woff');                   font-weight:900; font-style:normal; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontHeavyItalic/MontHeavyItalic.woff2') format('woff2'), url('/fonts/MontHeavyItalic/MontHeavyItalic.woff') format('woff');       font-weight:900; font-style:italic; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontBlack/MontBlack.woff2') format('woff2'), url('/fonts/MontBlack/MontBlack.woff') format('woff');                   font-weight:950; font-style:normal; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontBold/MontBold.woff2') format('woff2'), url('/fonts/MontBold/MontBold.woff') format('woff');                     font-weight:700; font-style:normal; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontBoldItalic/MontBoldItalic.woff2') format('woff2'), url('/fonts/MontBoldItalic/MontBoldItalic.woff') format('woff');         font-weight:700; font-style:italic; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontSemiBold/MontSemiBold.woff2') format('woff2'), url('/fonts/MontSemiBold/MontSemiBold.woff') format('woff');             font-weight:600; font-style:normal; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontSemiBoldItalic/MontSemiBoldItalic.woff2') format('woff2'), url('/fonts/MontSemiBoldItalic/MontSemiBoldItalic.woff') format('woff'); font-weight:600; font-style:italic; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontRegular/MontRegular.woff2') format('woff2'), url('/fonts/MontRegular/MontRegular.woff') format('woff');               font-weight:400; font-style:normal; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontRegularItalic/MontRegularItalic.woff2') format('woff2'), url('/fonts/MontRegularItalic/MontRegularItalic.woff') format('woff');   font-weight:400; font-style:italic; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontBook/MontBook.woff2') format('woff2'), url('/fonts/MontBook/MontBook.woff') format('woff');                     font-weight:350; font-style:normal; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontLight/MontLight.woff2') format('woff2'), url('/fonts/MontLight/MontLight.woff') format('woff');                   font-weight:300; font-style:normal; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontLightItalic/MontLightItalic.woff2') format('woff2'), url('/fonts/MontLightItalic/MontLightItalic.woff') format('woff');       font-weight:300; font-style:italic; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontThin/MontThin.woff2') format('woff2'), url('/fonts/MontThin/MontThin.woff') format('woff');                     font-weight:100; font-style:normal; }
+  @font-face { font-family:'Mont'; src:url('/fonts/MontThinItalic/MontThinItalic.woff2') format('woff2'), url('/fonts/MontThinItalic/MontThinItalic.woff') format('woff');         font-weight:100; font-style:italic; }
 
   /* Force Mont everywhere — overrides Tailwind's font-sans */
   *, body, html { font-family: 'Mont', sans-serif !important; }

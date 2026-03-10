@@ -23,7 +23,9 @@
       "Bash(pip install:*)",
       "Bash(1 sleep 5 echo \"Startup log:\" cat /tmp/backend_new.log)",
       "Bash(head -5 \"c:/Users/Kunguma.Balaji/Downloads/FLEET-FULL-STACK--main \\(1\\)/FLEET-FULL-STACK--main/frontend/public/HSBC Leases\\(Lease Register HSBC\\).csv\")",
-      "Bash(python3 -c \":*)"
+      "Bash(python3 -c \":*)",
+      "Read(//c/Users/Kunguma.Balaji/.claude/projects/c--Users-Kunguma-Balaji-Downloads-FLEET-FULL-STACK--main--1--FLEET-FULL-STACK--main/fad6e54f-fb11-4761-a956-f17c3cf54ed8/tool-results/**)",
+      "Bash(wc -l \"c:/Users/Kunguma.Balaji/Downloads/FLEET-FULL-STACK--main \\(1\\)/FLEET-FULL-STACK--main/frontend/src/pages/vehicleCondition.tsx\")"
     ]
   }
 }

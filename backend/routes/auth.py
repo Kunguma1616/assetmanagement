@@ -38,7 +38,7 @@ ALLOWED_USERS = {
     "c8ed9225-5ef3-4b33-9963-156bd42630be": {"name": "Jebarsan Mangalarajah",  "trade": None},
     "5d1cb14a-9e88-489f-8c97-bdeb85d8f87e": {"name": "Kabilraj Baskaran",      "trade": None},
     "1f7e5c0e-77a3-46f4-8650-8e8537248e19": {"name": "Kunguma Balaji",          "trade": None},
-    "e4577b87-8ead-4992-8c48-d658fc006f5f": {"name": "Lee Merryweather",        "trade": "Building Fabric"},
+    "e4577b87-8ead-4992-8c48-d658fc006f5f": {"name": "Lee Merryweather",        "trade": "Building Fabric, Environmental Services"},
     "2a41287a-2343-4c0c-b65d-28f932de6e37": {"name": "Mariia Pyvovarchuk",     "trade": None},
     "a8e114bc-03a7-4104-a89a-83ddec10df90": {"name": "Marjan Kola",            "trade": "LDR"},
     "444c382f-c4ae-43b2-b7fe-9863f10fae8b": {"name": "Martin Mackie",          "trade": "Drainage & Plumbing"},
