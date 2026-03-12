@@ -335,7 +335,7 @@ def update_vehicle_allocation(data: UpdateAllocationRequest):
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields provided to update")
 
-        print(f"📝 Updating allocation {data.allocation_id} with: {update_data}")
+        print(f"Updating allocation {data.allocation_id} with: {update_data}")
         sf.sf.Vehicle_Allocation__c.update(data.allocation_id, update_data)
 
         return {

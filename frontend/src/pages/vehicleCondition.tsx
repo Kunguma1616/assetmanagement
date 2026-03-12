@@ -1,45 +1,33 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { getTradeGroup, getAllTradeGroups, RESTRICTED_USERS, isExcludedTrade } from '@/config/tradeMapping';
+import React, { useState, useEffect } from "react";
+import { getAllTradeGroups, RESTRICTED_USERS, isExcludedTrade } from '@/config/tradeMapping';
 import { useUserTrade } from '@/hooks/useUserTrade';
 import { Lock } from 'lucide-react';
 
 /* ── Type Definitions ── */
-interface SubmittedVCR {
+interface VCRRecord {
   vehicleId: string;
   vanName: string;
   regNo: string;
   engineerName: string;
-  trade?: string;
-  rawTrade?: string;
-  tradeGroup?: string;
-  latestVcrDate: string;
-  daysSince: number;
-  status: "Submitted";
-}
-
-interface NotSubmittedVCR {
-  vehicleId: string;
-  vanName: string;
-  regNo: string;
-  engineerName: string;
-  trade?: string;
-  rawTrade?: string;
-  tradeGroup?: string;
+  trade: string;        // mapped category from backend e.g. "Building Fabric"
+  rawTrade: string;     // original SF value e.g. "Carpentry"
   latestVcrDate: string | null;
   daysSince: number | null;
-  status: "Missing" | "Overdue";
+  status: "Submitted" | "Overdue" | "Missing";
+  // enriched on frontend:
+  tradeGroup?: string;
+  displayGroup?: string;
 }
 
 interface DashboardData {
   totalAllocated: number;
   submittedCount: number;
   notSubmittedCount: number;
-  submitted: SubmittedVCR[];
-  notSubmitted: NotSubmittedVCR[];
+  submitted: VCRRecord[];
+  notSubmitted: VCRRecord[];
   asOfDate: string;
 }
 
-/* ── AI Analysis Types ── */
 interface AIImageReport {
   image_title: string;
   area_captured: string;
@@ -89,70 +77,97 @@ interface SearchResult {
   }>;
 }
 
-/* ── Design Tokens (Company Palette) ── */
+/* ── Design Tokens ── */
 const C = {
   brand: { blue: "#27549D", yellow: "#F1FF24" },
-  support: { gray: "#848EA3", green: "#2EB844", orange: "#F29630", red: "#D15134" },
   primary: { light: "#7099DB", default: "#27549D", darker: "#17325E", subtle: "#F7F9FD" },
-  error: { light: "#E49786", default: "#D15134", darker: "#812F1D", subtle: "#FAEDEA" },
+  error:   { light: "#E49786", default: "#D15134", darker: "#812F1D", subtle: "#FAEDEA" },
   warning: { light: "#F7C182", default: "#F29630", darker: "#A35C0A", subtle: "#FEF5EC" },
   success: { light: "#A8D5BA", default: "#40916C", darker: "#1B4B35", subtle: "#E8F5F1" },
   gray: {
-    title: "#1A1D23",
-    body: "#323843",
-    subtle: "#646F86",
-    caption: "#848EA3",
-    negative: "#F3F4F6",
-    disabled: "#CDD1DA",
-    border: "#CDD1DA",
-    borderSubtle: "#E8EAEE",
-    surface: "#F3F4F6",
+    title: "#1A1D23", body: "#323843", subtle: "#646F86", caption: "#848EA3",
+    negative: "#F3F4F6", disabled: "#CDD1DA", border: "#CDD1DA",
+    borderSubtle: "#E8EAEE", surface: "#F3F4F6",
   },
   text: {
-    title: "#1A1D23",
-    body: "#323843",
-    subtle: "#646F86",
-    caption: "#848EA3",
-    disabled: "#CDD1DA",
-    negative: "#F3F4F6",
-    primaryLabel: "#17325E",
-    errorLabel: "#812F1D",
-    warningLabel: "#A35C0A",
+    title: "#1A1D23", body: "#323843", subtle: "#646F86", caption: "#848EA3",
+    disabled: "#CDD1DA", negative: "#F3F4F6", primaryLabel: "#17325E",
+    errorLabel: "#812F1D", warningLabel: "#A35C0A",
   },
   border: {
-    primary: "#DEE8F7",
-    error: "#F6DBD5",
-    warning: "#FCE9D4",
-    default: "#CDD1DA",
-    subtle: "#E8EAEE",
+    primary: "#DEE8F7", error: "#F6DBD5", warning: "#FCE9D4",
+    default: "#CDD1DA", subtle: "#E8EAEE",
   },
   surface: {
-    primarySubtle: "#F7F9FD",
-    errorSubtle: "#FAEDEA",
-    warningSubtle: "#FEF5EC",
-    successSubtle: "#E8F5F1",
+    primarySubtle: "#F7F9FD", errorSubtle: "#FAEDEA",
+    warningSubtle: "#FEF5EC", successSubtle: "#E8F5F1",
   },
 } as const;
 
-const FONT = "'Mont', 'Montserrat', sans-serif";
+const FONT    = "'Mont', 'Montserrat', sans-serif";
 const API_BASE = "/api/vehicle-condition";
 
-/* ── KPI Card Component ── */
-interface KPICardProps {
-  label: string;
-  value: number;
-  subtext: string;
-  icon: React.ReactNode;
-  color: "blue" | "green" | "orange" | "red";
-  onClick?: () => void;
+/* ── ENV trades for Lee sub-group ── */
+const ENV_RAW_TRADES_LC = new Set([
+  'environmental services', 'pest control', 'pest proofing',
+  'sanitisation', 'sanitisation & specialist cleaning',
+  'waste clearance', 'rubbish removal', 'gardening',
+]);
+
+/* ── Sub-trade mappings ── */
+const SUB_TRADE_MAPPINGS: Record<string, string> = {
+  'pest control': 'Pest Control',
+  'pest proofing': 'Pest Control',
+  'sanitisation': 'Sanitation',
+  'sanitisation & specialist cleaning': 'Sanitation',
+  'waste clearance': 'Waste Cleaners',
+  'rubbish removal': 'Waste Cleaners',
+  'gardening': 'Waste Cleaners',
+};
+
+function getEnvironmentalSubTrade(rawTrade: string): 'Pest Control' | 'Sanitation' | 'Waste Cleaners' | null {
+  const check = (rawTrade || '').toLowerCase().trim();
+  return SUB_TRADE_MAPPINGS[check] as any || null;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   CORE FIX: enrichRecord
+   The backend now sends `trade` (mapped category) and `rawTrade` (original SF)
+   on every record directly from the allocation. We just use them — no lookup.
+   ───────────────────────────────────────────────────────────────────────────── */
+function getLeeSubGroup(trade: string, rawTrade: string): 'Roofing' | 'Environmental Services' | 'Multi' | 'Decoration' | null {
+  const isBF  = trade === 'Building Fabric';
+  const isEnv = trade === 'Environmental Services';
+  if (!isBF && !isEnv) return null;
+
+  const check = (rawTrade || trade).toLowerCase().trim();
+  if (check.includes('roofing'))            return 'Roofing';
+  if (check.includes('decoration') || check.includes('decorating')) return 'Decoration';
+  if (isEnv || ENV_RAW_TRADES_LC.has(check)) return 'Environmental Services';
+  if (isBF)                                  return 'Multi';
+  return null;
+}
+
+function enrichRecord(record: VCRRecord): VCRRecord & { tradeGroup: string; displayGroup: string } {
+  // trade already IS the mapped category (e.g. "Building Fabric") — use directly
+  const tradeGroup   = record.trade || 'N/A';
+  const sub          = getLeeSubGroup(tradeGroup, record.rawTrade || '');
+  const displayGroup = sub ?? tradeGroup;
+  return { ...record, tradeGroup, displayGroup };
+}
+
+/* ── KPI Card ── */
+interface KPICardProps {
+  label: string; value: number; subtext: string;
+  icon: React.ReactNode; color: "blue" | "green" | "orange" | "red";
+  onClick?: () => void;
+}
 const KPICard: React.FC<KPICardProps> = ({ label, value, subtext, icon, color, onClick }) => {
   const colorMap = {
-    blue: { bg: C.surface.primarySubtle, text: C.primary.default, border: C.border.primary },
-    green: { bg: C.surface.successSubtle, text: C.success.default, border: "#A8D5BA" },
+    blue:   { bg: C.surface.primarySubtle, text: C.primary.default, border: C.border.primary },
+    green:  { bg: C.surface.successSubtle, text: C.success.default, border: "#A8D5BA" },
     orange: { bg: C.surface.warningSubtle, text: C.warning.default, border: C.border.warning },
-    red: { bg: C.surface.errorSubtle, text: C.error.default, border: C.border.error },
+    red:    { bg: C.surface.errorSubtle,   text: C.error.default,   border: C.border.error },
   };
   const colors = colorMap[color];
   return (
@@ -172,61 +187,47 @@ const KPICard: React.FC<KPICardProps> = ({ label, value, subtext, icon, color, o
   );
 };
 
-/* ── Table Component ── */
-interface TableColumn {
-  key: string;
-  label: string;
-  width?: string;
-  sortable?: boolean;
-}
-
+/* ── Table ── */
+interface TableColumn { key: string; label: string; width?: string; sortable?: boolean; }
 interface TableProps {
   title: string;
-  data: SubmittedVCR[] | NotSubmittedVCR[];
+  data: (VCRRecord & { tradeGroup?: string; displayGroup?: string })[];
   columns: TableColumn[];
   emptyMessage: string;
-  onVehicleClick?: (vanName: string) => void;
-  sortKey?: string;
-  sortOrder?: 'asc' | 'desc';
-  onSort?: (key: string) => void;
+  onEngineerClick?: (vanName: string) => void;
+  sortKey?: string; sortOrder?: 'asc' | 'desc'; onSort?: (key: string) => void;
 }
 
-const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVehicleClick, sortKey, sortOrder, onSort }) => {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Submitted": return { bg: C.surface.successSubtle, color: C.success.default };
-      case "Overdue":   return { bg: C.surface.warningSubtle, color: C.warning.default };
-      case "Missing":   return { bg: C.surface.errorSubtle,   color: C.error.default };
-      default:          return { bg: C.gray.negative,         color: C.gray.body };
-    }
+const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onEngineerClick, sortKey, sortOrder, onSort }) => {
+  const statusColor = (s: string) => {
+    if (s === "Submitted") return { bg: C.surface.successSubtle, color: C.success.default };
+    if (s === "Overdue")   return { bg: C.surface.warningSubtle, color: C.warning.default };
+    return                        { bg: C.surface.errorSubtle,   color: C.error.default };
   };
 
-  const sortedData = [...data].sort((a, b) => {
+  const sorted = [...data].sort((a, b) => {
     if (!sortKey) return 0;
-    const aVal = a[sortKey as keyof typeof a];
-    const bVal = b[sortKey as keyof typeof b];
-    if (!aVal && bVal) return sortOrder === 'asc' ? -1 : 1;
-    if (aVal && !bVal) return sortOrder === 'asc' ? 1 : -1;
-    if (!aVal && !bVal) return 0;
-    if (typeof aVal === 'number' && typeof bVal === 'number') return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-    const aStr = String(aVal).toLowerCase();
-    const bStr = String(bVal).toLowerCase();
-    return sortOrder === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+    const av = (a as any)[sortKey], bv = (b as any)[sortKey];
+    if (av == null && bv != null) return sortOrder === 'asc' ? -1 : 1;
+    if (av != null && bv == null) return sortOrder === 'asc' ? 1 : -1;
+    if (av == null && bv == null) return 0;
+    if (typeof av === 'number' && typeof bv === 'number') return sortOrder === 'asc' ? av - bv : bv - av;
+    return sortOrder === 'asc'
+      ? String(av).toLowerCase().localeCompare(String(bv).toLowerCase())
+      : String(bv).toLowerCase().localeCompare(String(av).toLowerCase());
   });
 
   return (
     <div style={{ marginBottom: "32px" }}>
       <h2 style={{ fontSize: "18px", fontWeight: 700, color: C.text.title, marginBottom: "16px" }}>{title}</h2>
-      <p style={{ fontSize: "12px", color: C.gray.caption, marginBottom: "12px" }}>{data.length} vehicle{data.length !== 1 ? "s" : ""}</p>
+      <p style={{ fontSize: "12px", color: C.gray.caption, marginBottom: "12px" }}>{data.length} engineer{data.length !== 1 ? "s" : ""}</p>
       <div style={{ overflowX: "auto", borderRadius: "10px", border: `1px solid ${C.border.subtle}` }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, fontSize: "13px", background: "#FFFFFF" }}>
           <thead>
             <tr style={{ borderBottom: `2px solid ${C.border.subtle}`, background: C.gray.negative }}>
               {columns.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => col.sortable && onSort?.(col.key)}
-                  style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: C.text.body, width: col.width, cursor: col.sortable ? 'pointer' : 'default', userSelect: 'none', background: sortKey === col.key ? `${C.primary.default}10` : 'inherit', transition: 'all 0.2s' }}
+                <th key={col.key} onClick={() => col.sortable && onSort?.(col.key)}
+                  style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: C.text.body, width: col.width, cursor: col.sortable ? 'pointer' : 'default', userSelect: 'none', background: sortKey === col.key ? `${C.primary.default}10` : 'inherit', transition: 'background 0.2s' }}
                   onMouseEnter={(e) => { if (col.sortable) (e.currentTarget as HTMLElement).style.background = `${C.primary.default}15`; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = sortKey === col.key ? `${C.primary.default}10` : 'inherit'; }}
                 >
@@ -241,40 +242,40 @@ const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVeh
             </tr>
           </thead>
           <tbody>
-            {sortedData.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} style={{ padding: "60px 16px", textAlign: "center", color: C.gray.caption, fontSize: "14px", fontWeight: 500 }}>{emptyMessage}</td>
+            {sorted.length === 0 ? (
+              <tr><td colSpan={columns.length} style={{ padding: "60px 16px", textAlign: "center", color: C.gray.caption, fontSize: "14px", fontWeight: 500 }}>{emptyMessage}</td></tr>
+            ) : sorted.map((row, idx) => (
+              <tr key={idx}
+                style={{ borderBottom: `1px solid ${C.border.subtle}`, transition: "background 0.2s" }}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = C.gray.negative)}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = "#FFFFFF")}
+              >
+                {columns.map((col) => {
+                  let content: React.ReactNode = (row as any)[col.key];
+
+                  if (col.key === "engineerName" && onEngineerClick) {
+                    content = (
+                      <span role="button" tabIndex={0}
+                        onClick={() => onEngineerClick(row.vanName)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onEngineerClick(row.vanName); }}
+                        style={{ color: C.primary.default, fontWeight: 600, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}
+                      >{content}</span>
+                    );
+                  }
+                  if (col.key === "status") {
+                    const sc = statusColor(content as string);
+                    content = <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: "6px", background: sc.bg, color: sc.color, fontSize: "12px", fontWeight: 600 }}>{content}</span>;
+                  }
+                  if (col.key === "daysSince" && content != null) {
+                    content = <span style={{ fontWeight: 600, color: (content as number) > 14 ? C.error.default : C.success.default }}>{`${content} days`}</span>;
+                  }
+                  if (col.key === "latestVcrDate") content = content || "No VCR Report";
+                  if (col.key === "vanName")       content = content || "N/A";
+
+                  return <td key={col.key} style={{ padding: "12px 16px", color: C.text.body, width: col.width, wordBreak: "break-word" }}>{content}</td>;
+                })}
               </tr>
-            ) : (
-              sortedData.map((row, idx) => (
-                <tr key={idx} style={{ borderBottom: `1px solid ${C.border.subtle}`, transition: "background 0.2s" }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = C.gray.negative)}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = "#FFFFFF")}
-                >
-                  {columns.map((col) => {
-                    let content: React.ReactNode = row[col.key as keyof typeof row] as React.ReactNode;
-                    if (col.key === "engineerName" && onVehicleClick) {
-                      const vanName = (row as SubmittedVCR | NotSubmittedVCR).vanName;
-                      content = (
-                        <span role="button" tabIndex={0} onClick={() => onVehicleClick(vanName)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onVehicleClick(vanName); }}
-                          style={{ color: C.primary.default, fontWeight: 600, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>
-                          {content}
-                        </span>
-                      );
-                    }
-                    if (col.key === "status") {
-                      const colors = getStatusColor(content as string);
-                      content = <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: "6px", background: colors.bg, color: colors.color, fontSize: "12px", fontWeight: 600 }}>{content}</span>;
-                    }
-                    if (col.key === "daysSince" && content !== null && content !== undefined) {
-                      content = <span style={{ fontWeight: 600, color: (content as number) > 14 ? C.error.default : C.success.default }}>{content === null ? "No data" : `${content} days`}</span>;
-                    }
-                    if (col.key === "latestVcrDate") content = content || "No report";
-                    return <td key={col.key} style={{ padding: "12px 16px", color: C.text.body, width: col.width, wordBreak: "break-word" }}>{content}</td>;
-                  })}
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
@@ -283,13 +284,7 @@ const Table: React.FC<TableProps> = ({ title, data, columns, emptyMessage, onVeh
 };
 
 /* ── Lightbox ── */
-interface LightboxProps {
-  image: string | null;
-  title: string;
-  onClose: () => void;
-}
-
-const Lightbox: React.FC<LightboxProps> = ({ image, title, onClose }) => {
+const Lightbox: React.FC<{ image: string | null; title: string; onClose: () => void }> = ({ image, title, onClose }) => {
   if (!image) return null;
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(26,29,35,0.85)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", backdropFilter: "blur(8px)" }}>
@@ -301,29 +296,29 @@ const Lightbox: React.FC<LightboxProps> = ({ image, title, onClose }) => {
   );
 };
 
-/* ── Modal for Lists ── */
+/* ── List Modal ── */
 interface ListModalProps {
-  isOpen: boolean;
-  title: string;
-  data: SubmittedVCR[] | NotSubmittedVCR[];
-  columns: TableColumn[];
-  onClose: () => void;
-  color: "blue" | "green" | "orange" | "red";
+  isOpen: boolean; title: string;
+  data: (VCRRecord & { tradeGroup?: string; displayGroup?: string })[];
+  columns: TableColumn[]; onClose: () => void; color: "blue" | "green" | "orange" | "red";
 }
-
 const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onClose, color }) => {
   if (!isOpen) return null;
-  const colorMap = { green: C.success.default, orange: C.warning.default, red: C.error.default };
-  const titleColor = colorMap[color as keyof typeof colorMap] || C.primary.default;
+  const titleColor = color === "green" ? C.success.default : color === "red" ? C.error.default : C.warning.default;
+  const statusColor = (s: string) => {
+    if (s === "Submitted") return { bg: C.surface.successSubtle, color: C.success.default };
+    if (s === "Overdue")   return { bg: C.surface.warningSubtle, color: C.warning.default };
+    return                        { bg: C.surface.errorSubtle,   color: C.error.default };
+  };
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(26,29,35,0.7)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#FFFFFF", borderRadius: "12px", maxWidth: "90vw", maxHeight: "85vh", width: "1000px", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div style={{ padding: "24px 28px", borderBottom: `1px solid ${C.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ fontSize: "20px", fontWeight: 700, color: titleColor, margin: 0 }}>{title}</h2>
-          <button onClick={onClose} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: C.gray.subtle, padding: "0", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <button onClick={onClose} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: C.gray.subtle }}>✕</button>
         </div>
         <div style={{ overflow: "auto", flex: 1, padding: "24px 28px" }}>
-          <p style={{ fontSize: "12px", color: C.gray.caption, marginBottom: "16px" }}>{data.length} vehicle{data.length !== 1 ? "s" : ""}</p>
+          <p style={{ fontSize: "12px", color: C.gray.caption, marginBottom: "16px" }}>{data.length} engineer{data.length !== 1 ? "s" : ""}</p>
           <div style={{ overflowX: "auto", borderRadius: "10px", border: `1px solid ${C.border.subtle}` }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, fontSize: "13px", background: "#FFFFFF" }}>
               <thead>
@@ -334,37 +329,30 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
                 </tr>
               </thead>
               <tbody>
-                {data.length === 0 ? (
-                  <tr><td colSpan={columns.length} style={{ padding: "40px 16px", textAlign: "center", color: C.gray.caption, fontSize: "14px", fontWeight: 500 }}>No vehicles found</td></tr>
-                ) : (
-                  data.map((row, idx) => (
-                    <tr key={idx} style={{ borderBottom: `1px solid ${C.border.subtle}`, transition: "background 0.2s" }}
+                {data.length === 0
+                  ? <tr><td colSpan={columns.length} style={{ padding: "40px 16px", textAlign: "center", color: C.gray.caption }}>No engineers found</td></tr>
+                  : data.map((row, idx) => (
+                    <tr key={idx}
+                      style={{ borderBottom: `1px solid ${C.border.subtle}`, transition: "background 0.2s" }}
                       onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = C.gray.negative)}
                       onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = "#FFFFFF")}
                     >
                       {columns.map((col) => {
-                        let content = row[col.key as keyof typeof row];
+                        let content: React.ReactNode = (row as any)[col.key];
                         if (col.key === "status") {
-                          const sc = (s: string) => {
-                            switch (s) {
-                              case "Submitted": return { bg: C.surface.successSubtle, color: C.success.default };
-                              case "Overdue":   return { bg: C.surface.warningSubtle, color: C.warning.default };
-                              case "Missing":   return { bg: C.surface.errorSubtle,   color: C.error.default };
-                              default:          return { bg: C.gray.negative,         color: C.gray.body };
-                            }
-                          };
-                          const colors = sc(content as string);
-                          content = <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: "6px", background: colors.bg, color: colors.color, fontSize: "12px", fontWeight: 600 }}>{content}</span>;
+                          const sc = statusColor(content as string);
+                          content = <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: "6px", background: sc.bg, color: sc.color, fontSize: "12px", fontWeight: 600 }}>{content}</span>;
                         }
-                        if (col.key === "daysSince" && content !== null && content !== undefined) {
-                          content = <span style={{ fontWeight: 600, color: (content as number) > 14 ? C.error.default : C.success.default }}>{content === null ? "No data" : `${content} days`}</span>;
+                        if (col.key === "daysSince" && content != null) {
+                          content = <span style={{ fontWeight: 600, color: (content as number) > 14 ? C.error.default : C.success.default }}>{`${content} days`}</span>;
                         }
-                        if (col.key === "latestVcrDate") content = content || "No report";
+                        if (col.key === "latestVcrDate") content = content || "No VCR Report";
+                        if (col.key === "vanName")       content = content || "N/A";
                         return <td key={col.key} style={{ padding: "12px 16px", color: C.text.body, width: col.width, wordBreak: "break-word" }}>{content}</td>;
                       })}
                     </tr>
                   ))
-                )}
+                }
               </tbody>
             </table>
           </div>
@@ -376,81 +364,46 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
 
 /* ── Main Component ── */
 const VehicleConditionDashboard: React.FC = () => {
-
-  const [dashboard, setDashboard]             = useState<DashboardData | null>(null);
-  const [engineerTrades, setEngineerTrades]       = useState<Record<string, string>>({});
-  const [engineerRawTrades, setEngineerRawTrades] = useState<Record<string, string>>({});
-  const [loading, setLoading]                 = useState(true);
-  const [searchTerm, setSearchTerm]           = useState("");
-  const [searchResult, setSearchResult]       = useState<SearchResult | null>(null);
-  const [searchLoading, setSearchLoading]     = useState(false);
-  const [searchError, setSearchError]         = useState("");
-  const [lightboxImage, setLightboxImage]     = useState<string | null>(null);
-  const [lightboxTitle, setLightboxTitle]     = useState("");
-  const [modalOpen, setModalOpen]             = useState<"submitted" | "notSubmitted" | null>(null);
-  const [filterMode, setFilterMode]           = useState<'today' | 'yesterday' | '7days' | null>(null);
-  const [filterDate, setFilterDate]           = useState<string>("");
+  const [dashboard,        setDashboard]        = useState<DashboardData | null>(null);
+  const [loading,          setLoading]          = useState(true);
+  const [searchTerm,       setSearchTerm]       = useState("");
+  const [searchResult,     setSearchResult]     = useState<SearchResult | null>(null);
+  const [searchLoading,    setSearchLoading]    = useState(false);
+  const [searchError,      setSearchError]      = useState("");
+  const [lightboxImage,    setLightboxImage]    = useState<string | null>(null);
+  const [lightboxTitle,    setLightboxTitle]    = useState("");
+  const [modalOpen,        setModalOpen]        = useState<"submitted" | "notSubmitted" | null>(null);
+  const [filterMode,       setFilterMode]       = useState<'today' | 'yesterday' | '7days' | null>(null);
+  const [filterDate,       setFilterDate]       = useState<string>("");
   const [tradeGroupFilter, setTradeGroupFilter] = useState<string>("");
-  const [leeSubFilter, setLeeSubFilter]         = useState<'Multi' | 'Environmental Services' | 'Roofing' | null>(null);
-  const [vcrPopup, setVcrPopup]               = useState<{ result: SearchResult | null; loading: boolean; open: boolean }>({ result: null, loading: false, open: false });
-  const [aiAnalysis, setAiAnalysis]           = useState<AIAnalysisResult | null>(null);
-  const [aiLoading, setAiLoading]             = useState(false);
-  const [aiError, setAiError]                 = useState("");
+  const [leeSubFilter,     setLeeSubFilter]     = useState<'Multi' | 'Environmental Services' | 'Roofing' | 'Decoration' | null>(null);
+  const [envSubFilter,     setEnvSubFilter]     = useState<'Pest Control' | 'Sanitation' | 'Waste Cleaners' | null>(null);
+  const [vcrPopup,         setVcrPopup]         = useState<{ result: SearchResult | null; loading: boolean; open: boolean }>({ result: null, loading: false, open: false });
+  const [aiAnalysis,       setAiAnalysis]       = useState<AIAnalysisResult | null>(null);
+  const [aiLoading,        setAiLoading]        = useState(false);
+  const [aiError,          setAiError]          = useState("");
   const [aiAnalysisFilter, setAiAnalysisFilter] = useState<"all" | "red" | "amber" | "green">("all");
-  const [submittedSort, setSubmittedSort]     = useState<{ key: string; order: 'asc' | 'desc' }>({ key: 'latestVcrDate', order: 'desc' });
+  const [submittedSort,    setSubmittedSort]    = useState<{ key: string; order: 'asc' | 'desc' }>({ key: 'latestVcrDate', order: 'desc' });
   const [notSubmittedSort, setNotSubmittedSort] = useState<{ key: string; order: 'asc' | 'desc' }>({ key: 'vanName', order: 'asc' });
 
-  const handleSubmittedSort = (key: string) => setSubmittedSort(prev => ({ key, order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc' }));
-  const handleNotSubmittedSort = (key: string) => setNotSubmittedSort(prev => ({ key, order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc' }));
-
   const { userTrade, showsAllTrades } = useUserTrade();
-
-  const loadEngineerTrades = async () => {
-    try {
-      const res = await fetch('/api/vehicle-condition/engineers');
-      if (!res.ok) throw new Error(`Failed to load engineers: ${res.status}`);
-      const data = await res.json();
-      const trades:    Record<string, string> = {};
-      const rawTrades: Record<string, string> = {};
-      const engineersList: Array<{ name: string; trade: string; rawTrade?: string }> = data.engineers || [];
-      engineersList.forEach((engineer) => {
-        const name     = (engineer.name     || '').trim();
-        const trade    = (engineer.trade    || '').trim();
-        const rawTrade = (engineer.rawTrade || '').trim();
-        if (name && trade) {
-          const cleanName   = name.split('(')[0].split('+')[0].trim();
-          const mappedTrade = getTradeGroup(trade);
-          trades[cleanName]    = mappedTrade;
-          trades[name]         = mappedTrade;
-          rawTrades[cleanName] = rawTrade;
-          rawTrades[name]      = rawTrade;
-        }
-      });
-      setEngineerTrades(trades);
-      setEngineerRawTrades(rawTrades);
-    } catch (e) {
-      console.error("Failed to load engineer trades:", e);
-    }
-  };
 
   useEffect(() => {
     if (userTrade && userTrade !== 'ALL') setTradeGroupFilter(userTrade);
     loadDashboard();
-    loadEngineerTrades();
   }, [userTrade]);
 
   const loadDashboard = async () => {
     try {
       setLoading(true);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const timeoutId  = setTimeout(() => controller.abort(), 30000);
       const res = await fetch(`${API_BASE}/compliance/dashboard/all-allocated`, { signal: controller.signal });
       clearTimeout(timeoutId);
-      if (!res.ok) throw new Error(`Failed to load dashboard: ${res.status}`);
-      const data = await res.json();
-      setDashboard(data);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setDashboard(await res.json());
     } catch (e: any) {
-      console.error(e.name === 'AbortError' ? "Request timeout" : e.message);
+      console.error(e.name === 'AbortError' ? "Timeout" : e.message);
     } finally {
       setLoading(false);
     }
@@ -461,222 +414,149 @@ const VehicleConditionDashboard: React.FC = () => {
     const term = searchTerm.trim();
     if (!term) return;
     try {
-      setSearchLoading(true);
-      setSearchError("");
+      setSearchLoading(true); setSearchError("");
       const res = await fetch(`${API_BASE}/compliance/search/${encodeURIComponent(term)}`);
-      if (!res.ok) {
-        setSearchError(res.status === 404 ? "Vehicle not found" : "Search failed");
-      } else {
-        setSearchResult(await res.json());
-      }
+      if (!res.ok) { setSearchError(res.status === 404 ? "Vehicle not found" : "Search failed"); return; }
+      setSearchResult(await res.json());
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : "Search failed");
-    } finally {
-      setSearchLoading(false);
-    }
+    } finally { setSearchLoading(false); }
   };
 
   const fetchAiAnalysis = async (formId: string) => {
-    setAiAnalysis(null);
-    setAiError("");
-    setAiLoading(true);
-    setAiAnalysisFilter("all");
+    setAiAnalysis(null); setAiError(""); setAiLoading(true); setAiAnalysisFilter("all");
     try {
       const res = await fetch(`${API_BASE}/ai-analyse/${formId}`);
       if (!res.ok) throw new Error(`AI analysis failed: ${res.status}`);
-      const data: AIAnalysisResult = await res.json();
-      setAiAnalysis(data);
+      setAiAnalysis(await res.json());
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "AI analysis failed");
-    } finally {
-      setAiLoading(false);
-    }
+    } finally { setAiLoading(false); }
   };
 
   const fetchVcrForVehicle = async (vanName: string) => {
-    setAiAnalysis(null);
-    setAiError("");
-    setAiLoading(false);
-    setAiAnalysisFilter("all");
+    if (!vanName || vanName === "N/A") return;
+    setAiAnalysis(null); setAiError(""); setAiLoading(false); setAiAnalysisFilter("all");
     setVcrPopup({ result: null, loading: true, open: true });
     try {
       const res = await fetch(`${API_BASE}/compliance/search/${encodeURIComponent(vanName)}`);
       if (!res.ok) throw new Error("Not found");
-      const data = await res.json();
-      setVcrPopup({ result: data, loading: false, open: true });
+      setVcrPopup({ result: await res.json(), loading: false, open: true });
     } catch {
       setVcrPopup({ result: null, loading: false, open: false });
     }
   };
 
-  const toDateStr = (d: Date) => d.toISOString().split('T')[0];
-  const todayStr = toDateStr(new Date());
-  const yesterdayDate = new Date(); yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterdayStr = toDateStr(yesterdayDate);
-  const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0);
+  /* ── Date helpers ── */
+  const toDateStr   = (d: Date) => d.toISOString().split('T')[0];
+  const todayStr    = toDateStr(new Date());
+  const ydDate      = new Date(); ydDate.setDate(ydDate.getDate() - 1);
+  const yesterdayStr = toDateStr(ydDate);
+  const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0,0,0,0);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Sub-group classification for Lee's 3 buttons.
-  // Works off tradeGroup (mapped category) + rawTrade/trade (raw SF value).
-  // The backend sends:
-  //   trade    → mapped category e.g. "Building Fabric"
-  //   rawTrade → original SF value e.g. "Carpentry" (may be absent / same as trade)
-  // ─────────────────────────────────────────────────────────────────────────────
-  const ENV_RAW_TRADES_LC = new Set([
-    'environmental services', 'pest control', 'pest proofing',
-    'sanitisation', 'sanitisation & specialist cleaning',
-    'waste clearance', 'rubbish removal', 'gardening',
-  ]);
-
-  const getLeeSubGroup = (v: { trade?: string; rawTrade?: string; tradeGroup?: string }): 'Roofing' | 'Environmental Services' | 'Multi' | null => {
-    const tg = v.tradeGroup || '';
-    const isBF  = tg === 'Building Fabric';
-    const isEnv = tg === 'Environmental Services';
-    if (!isBF && !isEnv) return null;
-
-    // Use rawTrade first (original SF value), fall back to trade field
-    const rawLower   = (v.rawTrade || '').toLowerCase().trim();
-    const tradeLower = (v.trade    || '').toLowerCase().trim();
-    const check      = rawLower || tradeLower;
-
-    if (check.includes('roofing'))        return 'Roofing';
-    if (isEnv || ENV_RAW_TRADES_LC.has(check)) return 'Environmental Services';
-    if (isBF) return 'Multi';   // Decoration, Carpentry, General Builders, Building Fabric, etc.
-    return null;
-  };
-
-  const enrichWithTrades = <T extends { engineerName: string; trade?: string; rawTrade?: string }>(items: T[]): (T & { tradeGroup?: string; displayGroup?: string })[] => {
-    return items.map((item) => {
-      let tradeGroup: string;
-      if (item.trade && item.trade.trim() !== '') {
-        tradeGroup = getTradeGroup(item.trade);
-      } else {
-        const fullName  = item.engineerName;
-        const cleanName = fullName.split('(')[0].split('+')[0].trim();
-        tradeGroup =
-          engineerTrades[cleanName] ||
-          engineerTrades[fullName.trim()] ||
-          engineerTrades[fullName] ||
-          Object.entries(engineerTrades).find(([key]) => key.toLowerCase() === cleanName.toLowerCase())?.[1] ||
-          'N/A';
-      }
-
-      // Resolve rawTrade: use item.rawTrade if present, else look up from engineerRawTrades
-      // This is the key fix — the dashboard endpoint sends rawTrade on each vehicle record,
-      // but the engineers endpoint previously didn't. Now it does, and we store it above.
-      const fullName  = item.engineerName;
-      const cleanName = fullName.split('(')[0].split('+')[0].trim();
-      const resolvedRawTrade =
-        (item.rawTrade && item.rawTrade.trim() !== '')
-          ? item.rawTrade
-          : engineerRawTrades[cleanName] ||
-            engineerRawTrades[fullName.trim()] ||
-            engineerRawTrades[fullName] ||
-            Object.entries(engineerRawTrades).find(([key]) => key.toLowerCase() === cleanName.toLowerCase())?.[1] ||
-            item.trade || '';
-
-      const enriched = { ...item, rawTrade: resolvedRawTrade, tradeGroup };
-      const sub          = getLeeSubGroup(enriched);
-      const displayGroup = sub ?? tradeGroup;
-      return { ...enriched, displayGroup };
-    });
-  };
-
-  const enrichedSubmitted    = enrichWithTrades(dashboard?.submitted    || []).filter(v => !isExcludedTrade(v.trade) && !isExcludedTrade(v.tradeGroup));
-  const enrichedNotSubmitted = enrichWithTrades(dashboard?.notSubmitted || []).filter(v => !isExcludedTrade(v.trade) && !isExcludedTrade(v.tradeGroup));
-  const actualTradeFilter    = !showsAllTrades() ? userTrade : tradeGroupFilter;
-
-  const userEmail = (() => { try { const d = JSON.parse(sessionStorage.getItem('user_data') || '{}'); return (d.email || '').toLowerCase().trim(); } catch { return ''; } })();
-  const userAllowedTrades = userEmail ? (RESTRICTED_USERS[userEmail] || null) : null;
-
+  /* ── User / permissions ── */
+  const userEmail = (() => { try { return (JSON.parse(sessionStorage.getItem('user_data') || '{}').email || '').toLowerCase().trim(); } catch { return ''; } })();
+  const userAllowedTrades     = userEmail ? (RESTRICTED_USERS[userEmail] || null) : null;
   const userAllowedCategories = userAllowedTrades
-    ? [...new Set(userAllowedTrades.map(t => getTradeGroup(t)))].filter(c => c && c !== 'N/A' && c !== 'EXCLUDED')
+    ? [...new Set(userAllowedTrades.map((t: string) => {
+        // map raw trade to category directly
+        const entry = Object.entries(RESTRICTED_USERS).find(([k]) => k === userEmail);
+        return t;
+      }))].filter(Boolean)
     : null;
 
-  const isLeeView =
-    !!userAllowedCategories &&
-    userAllowedCategories.includes('Building Fabric') &&
-    userAllowedCategories.includes('Environmental Services');
+  const isLeeView = !!userAllowedCategories &&
+    userAllowedCategories.some((c: string) => c === 'Building Fabric' || c.includes('Building')) &&
+    userAllowedCategories.some((c: string) => c === 'Environmental Services' || c.includes('Environmental'));
 
-  const matchesTrade = (v: { trade?: string; rawTrade?: string; tradeGroup?: string; displayGroup?: string }): boolean => {
+  /* ── Enrich all records — now trivial because backend sends trade + rawTrade ── */
+  const allSubmitted    = (dashboard?.submitted    || []).map(enrichRecord).filter(v => !isExcludedTrade(v.trade));
+  const allNotSubmitted = (dashboard?.notSubmitted || []).map(enrichRecord).filter(v => !isExcludedTrade(v.trade));
+
+  const actualTradeFilter = !showsAllTrades() ? userTrade : tradeGroupFilter;
+
+  /* ── Trade filter predicate ── */
+  const matchesTrade = (v: ReturnType<typeof enrichRecord>): boolean => {
     if (isLeeView || actualTradeFilter === 'Building Fabric & Environmental') {
-      const sub = getLeeSubGroup(v);
-      if (sub === null)   return false;   // not a Lee trade
-      if (!leeSubFilter)  return true;    // no button active → all Lee trades
-      return sub === leeSubFilter;        // button active → exact sub-group match
+      const sub = getLeeSubGroup(v.tradeGroup || '', v.rawTrade || '');
+      if (sub === null)  return false;
+      if (!leeSubFilter) return true;
+      
+      // If Environmental Services is selected, check environmental sub-filter
+      if (leeSubFilter === 'Environmental Services' && envSubFilter) {
+        const envSub = getEnvironmentalSubTrade(v.rawTrade || '');
+        return envSub === envSubFilter;
+      }
+      
+      return sub === leeSubFilter;
     }
     return !actualTradeFilter || v.tradeGroup === actualTradeFilter;
   };
 
-  const filteredSubmitted = enrichedSubmitted
-    .filter((v) => {
-      if (filterDate) return v.latestVcrDate === filterDate;
-      if (!filterMode) return true;
-      if (!v.latestVcrDate) return false;
-      if (filterMode === 'today')     return v.latestVcrDate === todayStr;
-      if (filterMode === 'yesterday') return v.latestVcrDate === yesterdayStr;
-      if (filterMode === '7days')     return new Date(v.latestVcrDate) >= sevenDaysAgo;
-      return true;
-    })
-    .filter(matchesTrade);
+  /* ── Date filter (submitted only) ── */
+  const dateFilter = (v: ReturnType<typeof enrichRecord>) => {
+    if (filterDate)               return v.latestVcrDate === filterDate;
+    if (!filterMode)              return true;
+    if (!v.latestVcrDate)         return false;
+    if (filterMode === 'today')     return v.latestVcrDate === todayStr;
+    if (filterMode === 'yesterday') return v.latestVcrDate === yesterdayStr;
+    if (filterMode === '7days')     return new Date(v.latestVcrDate) >= sevenDaysAgo;
+    return true;
+  };
 
-  const filteredNotSubmitted = enrichedNotSubmitted.filter(matchesTrade);
-  const isFiltered           = !!(filterMode || filterDate || actualTradeFilter || leeSubFilter);
-  const allUniqueEngineers = new Set([...enrichedSubmitted, ...enrichedNotSubmitted].map(v => v.engineerName)).size;
-  const totalAllocatedForUser = (isLeeView || actualTradeFilter || !showsAllTrades())
+  const filteredSubmitted    = allSubmitted.filter(dateFilter).filter(matchesTrade);
+  const filteredNotSubmitted = allNotSubmitted.filter(matchesTrade);
+
+  const isFiltered = !!(filterMode || filterDate || actualTradeFilter || leeSubFilter);
+  const totalForUser = (isLeeView || actualTradeFilter || !showsAllTrades())
     ? new Set([...filteredSubmitted, ...filteredNotSubmitted].map(v => v.engineerName)).size
-    : allUniqueEngineers;
-  const displaySubmittedCount    = filteredSubmitted.length;
-  const displayNotSubmittedCount = filteredNotSubmitted.length;
+    : new Set([...allSubmitted, ...allNotSubmitted].map(v => v.engineerName)).size;
 
-  const displaySubmittedSubtext =
-    filterDate ? `Submitted on ${filterDate}` :
-    filterMode === 'today' ? 'Submitted today' :
+  const submittedSubtext =
+    filterDate        ? `Submitted on ${filterDate}` :
+    filterMode === 'today'     ? 'Submitted today' :
     filterMode === 'yesterday' ? 'Submitted yesterday' :
-    filterMode === '7days' ? 'In last 7 days' : 'Within 14 days';
+    filterMode === '7days'     ? 'In last 7 days' : 'Within 14 days';
 
-  const displayNotSubmittedSubtext =
-    filterDate ? `Not submitted on ${filterDate}` :
-    filterMode === 'today' ? 'Not submitted today' :
+  const notSubmittedSubtext =
+    filterDate        ? `Not submitted on ${filterDate}` :
+    filterMode === 'today'     ? 'Not submitted today' :
     filterMode === 'yesterday' ? 'Not submitted yesterday' :
-    filterMode === '7days' ? 'Not submitted in 7 days' : 'Overdue or never submitted';
+    filterMode === '7days'     ? 'Not submitted in 7 days' : 'Overdue or never submitted';
 
   const submittedColumns: TableColumn[] = [
     { key: "vanName",       label: "Van Number",  width: "12%", sortable: true },
-    { key: "engineerName",  label: "Engineer",    width: "18%", sortable: true },
+    { key: "engineerName",  label: "Engineer",    width: "20%", sortable: true },
     { key: "displayGroup",  label: "Trade Group", width: "18%", sortable: true },
     { key: "latestVcrDate", label: "Last Report", width: "15%", sortable: true },
     { key: "daysSince",     label: "Days Since",  width: "12%", sortable: true },
-    { key: "status",        label: "Status",      width: "12%", sortable: true },
+    { key: "status",        label: "Status",      width: "10%", sortable: true },
   ];
-
   const notSubmittedColumns: TableColumn[] = [
     { key: "vanName",       label: "Van Number",   width: "12%", sortable: true },
-    { key: "engineerName",  label: "Engineer",     width: "18%", sortable: true },
+    { key: "engineerName",  label: "Engineer",     width: "20%", sortable: true },
     { key: "displayGroup",  label: "Trade Group",  width: "18%", sortable: true },
     { key: "latestVcrDate", label: "Last Report",  width: "15%", sortable: true },
     { key: "daysSince",     label: "Days Overdue", width: "12%", sortable: true },
-    { key: "status",        label: "Status",       width: "12%", sortable: true },
+    { key: "status",        label: "Status",       width: "10%", sortable: true },
   ];
 
-  if (loading) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: FONT }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ width: "40px", height: "40px", borderRadius: "50%", border: `3px solid ${C.border.subtle}`, borderTop: `3px solid ${C.brand.blue}`, animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-          <p style={{ color: C.gray.subtle, fontWeight: 600 }}>Loading VCR Dashboard...</p>
-        </div>
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: FONT }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ width: "40px", height: "40px", borderRadius: "50%", border: `3px solid ${C.border.subtle}`, borderTop: `3px solid ${C.brand.blue}`, animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+        <p style={{ color: C.gray.subtle, fontWeight: 600 }}>Loading VCR Dashboard...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div style={{ fontFamily: FONT, background: C.gray.surface, minHeight: "100vh", paddingBottom: "40px" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* ── Header ── */}
-      <div style={{ backgroundImage: "url('/London_Skyliner.png')", backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", borderBottom: `1px solid ${C.border.subtle}`, padding: "40px 20px", marginBottom: "32px", position: "relative" }}>
-        <div style={{ position: "absolute", inset: 0, background: "rgba(23, 50, 94, 0.55)", borderBottom: `1px solid ${C.border.subtle}` }} />
+      <div style={{ backgroundImage: "url('/London_Skyliner.png')", backgroundSize: "cover", backgroundPosition: "center", borderBottom: `1px solid ${C.border.subtle}`, padding: "40px 20px", marginBottom: "32px", position: "relative" }}>
+        <div style={{ position: "absolute", inset: 0, background: "rgba(23,50,94,0.55)" }} />
         <div style={{ maxWidth: "1400px", margin: "0 auto", position: "relative", zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
             <div>
@@ -686,8 +566,8 @@ const VehicleConditionDashboard: React.FC = () => {
             {(!showsAllTrades() || !!userAllowedCategories || isLeeView) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: `${C.warning.default}15`, border: `1.5px solid ${C.warning.default}`, whiteSpace: 'nowrap' }}>
                 <Lock style={{ width: 16, height: 16, color: C.warning.default }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.warning.default, fontFamily: FONT }}>
-                  Viewing {isLeeView ? (leeSubFilter ? `Lee's ${leeSubFilter}` : "Lee's Portfolio") : userAllowedCategories ? userAllowedCategories.join(' & ') : userTrade} only
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.warning.default }}>
+                  Viewing {isLeeView ? (leeSubFilter ? `Lee's ${leeSubFilter}` : "Lee's Portfolio") : userAllowedCategories ? (userAllowedCategories as string[]).join(' & ') : userTrade} only
                 </span>
               </div>
             )}
@@ -695,32 +575,24 @@ const VehicleConditionDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Main Container ── */}
       <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "0 20px" }}>
 
-        {/* ── Search Bar ── */}
+        {/* ── Search ── */}
         <div style={{ marginBottom: "32px" }}>
           <form onSubmit={handleSearch} style={{ display: "flex", gap: "12px", background: "#FFFFFF", padding: "20px", borderRadius: "12px", border: `1px solid ${C.border.subtle}` }}>
-            <input
-              type="text"
-              placeholder="Search by vehicle number, registration, or van number"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ flex: 1, padding: "12px 16px", borderRadius: "8px", border: `1px solid ${C.border.subtle}`, fontSize: "14px", fontFamily: FONT, outline: "none", transition: "border-color 0.2s" }}
+            <input type="text" placeholder="Search by vehicle number, registration, or van number"
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ flex: 1, padding: "12px 16px", borderRadius: "8px", border: `1px solid ${C.border.subtle}`, fontSize: "14px", fontFamily: FONT, outline: "none" }}
               onFocus={(e) => ((e.target as HTMLInputElement).style.borderColor = C.primary.default)}
               onBlur={(e)  => ((e.target as HTMLInputElement).style.borderColor = C.border.subtle)}
             />
             <button type="submit" disabled={searchLoading}
-              style={{ padding: "12px 28px", borderRadius: "8px", border: "none", background: C.brand.yellow, color: "#000", fontWeight: 700, fontSize: "14px", fontFamily: FONT, cursor: searchLoading ? "not-allowed" : "pointer", opacity: searchLoading ? 0.6 : 1, transition: "opacity 0.2s" }}
-            >
-              {searchLoading ? "Searching..." : "Search"}
-            </button>
+              style={{ padding: "12px 28px", borderRadius: "8px", border: "none", background: C.brand.yellow, color: "#000", fontWeight: 700, fontSize: "14px", fontFamily: FONT, cursor: searchLoading ? "not-allowed" : "pointer", opacity: searchLoading ? 0.6 : 1 }}
+            >{searchLoading ? "Searching..." : "Search"}</button>
           </form>
 
           {searchError && (
-            <div style={{ marginTop: "12px", padding: "12px 16px", background: C.surface.errorSubtle, border: `1px solid ${C.border.error}`, borderRadius: "8px", color: C.error.default, fontSize: "13px", fontWeight: 500 }}>
-              {searchError}
-            </div>
+            <div style={{ marginTop: "12px", padding: "12px 16px", background: C.surface.errorSubtle, border: `1px solid ${C.border.error}`, borderRadius: "8px", color: C.error.default, fontSize: "13px", fontWeight: 500 }}>{searchError}</div>
           )}
 
           {searchResult && (
@@ -732,9 +604,7 @@ const VehicleConditionDashboard: React.FC = () => {
                   <p style={{ fontSize: "14px", color: C.text.body, fontWeight: 600, margin: "0 0 4px 0" }}>{searchResult.latestVcr.name}</p>
                   <p style={{ fontSize: "12px", color: C.gray.caption, margin: 0 }}>{searchResult.latestVcr.engineer} • {searchResult.latestVcr.createdDate}</p>
                 </div>
-              ) : (
-                <p style={{ fontSize: "13px", color: C.gray.caption, marginBottom: "16px" }}>No VCR report found</p>
-              )}
+              ) : <p style={{ fontSize: "13px", color: C.gray.caption, marginBottom: "16px" }}>No VCR report found</p>}
               {searchResult.images.length > 0 ? (
                 <div>
                   <p style={{ fontSize: "13px", color: C.gray.subtle, margin: "0 0 12px 0", fontWeight: 600 }}>Attached Images ({searchResult.images.length})</p>
@@ -743,129 +613,130 @@ const VehicleConditionDashboard: React.FC = () => {
                       <div key={img.id} role="button" tabIndex={0}
                         onClick={() => { setLightboxImage(img.imageUrl); setLightboxTitle(img.title); }}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setLightboxImage(img.imageUrl); setLightboxTitle(img.title); } }}
-                        style={{ cursor: "pointer", borderRadius: "8px", overflow: "hidden", border: `1px solid ${C.border.subtle}`, aspectRatio: "1", background: C.gray.negative, transition: "transform 0.2s, box-shadow 0.2s" }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1.05)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 24px rgba(39,84,157,0.12)"; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+                        style={{ cursor: "pointer", borderRadius: "8px", overflow: "hidden", border: `1px solid ${C.border.subtle}`, aspectRatio: "1", background: C.gray.negative }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1.05)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"; }}
                       >
                         <img src={img.imageUrl} alt={img.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       </div>
                     ))}
                   </div>
                 </div>
-              ) : (
-                <p style={{ fontSize: "13px", color: C.gray.caption }}>No images attached</p>
-              )}
+              ) : <p style={{ fontSize: "13px", color: C.gray.caption }}>No images attached</p>}
             </div>
           )}
         </div>
 
         {/* ── KPI Cards ── */}
         <div style={{ display: "flex", gap: "16px", marginBottom: "40px", flexWrap: "wrap" }}>
-          <KPICard label="Total Active Engineers for Trade" value={totalAllocatedForUser} subtext={isLeeView ? (leeSubFilter ? `${leeSubFilter} only` : "Lee's Portfolio") : !showsAllTrades() ? `${userAllowedCategories ? userAllowedCategories.join(' & ') : userTrade} only` : ""} color="blue" icon="" />
-          <KPICard label="SUBMITTED"     value={displaySubmittedCount}    subtext={displaySubmittedSubtext}    color="green" icon="✓" onClick={() => setModalOpen("submitted")} />
-          <KPICard label="NOT SUBMITTED" value={displayNotSubmittedCount} subtext={displayNotSubmittedSubtext} color="red"   icon="✗" onClick={() => setModalOpen("notSubmitted")} />
+          <KPICard label="Total Active Engineers" value={totalForUser}
+            subtext={isLeeView ? (leeSubFilter ? `${leeSubFilter} only` : "Lee's Portfolio") : !showsAllTrades() ? `${userTrade} only` : "Currently allocated"}
+            color="blue" icon="" />
+          <KPICard label="SUBMITTED" value={filteredSubmitted.length} subtext={submittedSubtext} color="green" icon="✓" onClick={() => setModalOpen("submitted")} />
+          <KPICard label="NOT SUBMITTED" value={filteredNotSubmitted.length} subtext={notSubmittedSubtext} color="red" icon="✗" onClick={() => setModalOpen("notSubmitted")} />
         </div>
 
-        {/* ── Date / Trade Filter Bar ── */}
+        {/* ── Filter Bar ── */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", background: "#FFFFFF", padding: "16px 20px", borderRadius: "12px", border: `1px solid ${C.border.subtle}`, flexWrap: "wrap" }}>
           <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Filter by Date</span>
           {([{ key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: '7days', label: 'Last 7 Days' }] as const).map(({ key, label }) => {
             const active = filterMode === key && !filterDate;
             return (
               <button key={key} onClick={() => { setFilterDate(""); setFilterMode(active ? null : key); }}
-                style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${active ? C.primary.default : C.border.subtle}`, background: active ? C.primary.default : C.gray.negative, color: active ? "#FFFFFF" : C.gray.subtle, fontSize: "13px", fontWeight: 700, fontFamily: FONT, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
-              >
-                {label}
-              </button>
+                style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${active ? C.primary.default : C.border.subtle}`, background: active ? C.primary.default : C.gray.negative, color: active ? "#FFFFFF" : C.gray.subtle, fontSize: "13px", fontWeight: 700, fontFamily: FONT, cursor: "pointer", whiteSpace: "nowrap" }}
+              >{label}</button>
             );
           })}
-          <span style={{ color: C.gray.disabled, fontSize: "13px" }}>|</span>
+          <span style={{ color: C.gray.disabled }}>|</span>
           <input type="date" value={filterDate}
             onChange={(e) => { setFilterDate(e.target.value); setFilterMode(null); }}
-            style={{ padding: "8px 12px", borderRadius: "8px", border: `1px solid ${filterDate ? C.primary.default : C.border.subtle}`, fontSize: "13px", fontFamily: FONT, outline: "none", color: C.text.body, cursor: "pointer" }}
-            onFocus={(e) => ((e.target as HTMLInputElement).style.borderColor = C.primary.default)}
-            onBlur={(e)  => ((e.target as HTMLInputElement).style.borderColor = filterDate ? C.primary.default : C.border.subtle)}
+            style={{ padding: "8px 12px", borderRadius: "8px", border: `1px solid ${filterDate ? C.primary.default : C.border.subtle}`, fontSize: "13px", fontFamily: FONT, outline: "none", color: C.text.body }}
           />
-          <span style={{ color: C.gray.disabled, fontSize: "13px" }}>|</span>
+          <span style={{ color: C.gray.disabled }}>|</span>
+
+          {/* Lee sub-filter buttons */}
           {(isLeeView || actualTradeFilter === 'Building Fabric & Environmental') && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>View</span>
-              {(['Multi', 'Roofing', 'Environmental Services'] as const).map((group) => {
+              {(['Multi', 'Roofing', 'Decoration', 'Environmental Services'] as const).map((group) => {
                 const active = leeSubFilter === group;
                 return (
-                  <button key={group} onClick={() => setLeeSubFilter(active ? null : group)}
-                    style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${active ? C.primary.default : C.border.subtle}`, background: active ? C.primary.default : C.gray.negative, color: active ? "#FFFFFF" : C.gray.subtle, fontSize: "13px", fontWeight: 700, fontFamily: FONT, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
-                  >
-                    {group}
-                  </button>
+                  <button key={group} onClick={() => { setLeeSubFilter(active ? null : group); if (group !== 'Environmental Services') setEnvSubFilter(null); }}
+                    style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${active ? C.primary.default : C.border.subtle}`, background: active ? C.primary.default : C.gray.negative, color: active ? "#FFFFFF" : C.gray.subtle, fontSize: "13px", fontWeight: 700, fontFamily: FONT, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >{group}</button>
                 );
               })}
             </>
           )}
+
+          {/* Environmental Services sub-trade filters */}
+          {(isLeeView || actualTradeFilter === 'Building Fabric & Environmental') && leeSubFilter === 'Environmental Services' && (
+            <>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Sub-Trade</span>
+              {(['Pest Control', 'Sanitation', 'Waste Cleaners'] as const).map((subTrade) => {
+                const active = envSubFilter === subTrade;
+                return (
+                  <button key={subTrade} onClick={() => setEnvSubFilter(active ? null : subTrade)}
+                    style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${active ? C.warning.default : C.border.subtle}`, background: active ? C.warning.default : C.gray.negative, color: active ? "#FFFFFF" : C.gray.subtle, fontSize: "13px", fontWeight: 700, fontFamily: FONT, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >{subTrade}</button>
+                );
+              })}
+            </>
+          )}
+
+          {/* Trade group dropdown for admin */}
           {!isLeeView && showsAllTrades() && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Trade Group</span>
-              <select value={tradeGroupFilter} onChange={(e) => { setTradeGroupFilter(e.target.value); if (e.target.value !== 'Building Fabric & Environmental') setLeeSubFilter(null); }}
+              <select value={tradeGroupFilter}
+                onChange={(e) => { setTradeGroupFilter(e.target.value); if (e.target.value !== 'Building Fabric & Environmental') setLeeSubFilter(null); }}
                 style={{ padding: "8px 12px", borderRadius: "8px", border: `1px solid ${tradeGroupFilter ? C.primary.default : C.border.subtle}`, fontSize: "13px", fontFamily: FONT, outline: "none", color: tradeGroupFilter ? C.primary.default : C.gray.subtle, fontWeight: tradeGroupFilter ? 700 : 400, background: tradeGroupFilter ? C.surface.primarySubtle : C.gray.negative, cursor: "pointer", minWidth: "160px" }}
               >
                 <option value="">All Trade Groups</option>
-                {getAllTradeGroups().map((tg) => (<option key={tg} value={tg}>{tg}</option>))}
+                {getAllTradeGroups().map((tg) => <option key={tg} value={tg}>{tg}</option>)}
               </select>
             </>
           )}
-          {(filterMode || filterDate || leeSubFilter) && (
-            <button onClick={() => { setFilterMode(null); setFilterDate(""); setTradeGroupFilter(""); setLeeSubFilter(null); }}
+
+          {(filterMode || filterDate || leeSubFilter || envSubFilter) && (
+            <button onClick={() => { setFilterMode(null); setFilterDate(""); setTradeGroupFilter(""); setLeeSubFilter(null); setEnvSubFilter(null); }}
               style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${C.border.subtle}`, background: C.gray.negative, fontSize: "12px", fontWeight: 600, color: C.gray.subtle, cursor: "pointer", fontFamily: FONT }}
-            >
-              Clear ✕
-            </button>
+            >Clear ✕</button>
           )}
           {(isFiltered || actualTradeFilter) && (
             <span style={{ fontSize: "12px", color: C.gray.caption }}>
-              {filteredSubmitted.length} submitted · {filteredNotSubmitted.length} not submitted{isLeeView && leeSubFilter ? ` · ${leeSubFilter}` : userAllowedCategories ? ` · ${userAllowedCategories.join(' & ')}` : actualTradeFilter ? ` · ${actualTradeFilter}` : ""}
+              {filteredSubmitted.length} submitted · {filteredNotSubmitted.length} not submitted
+              {envSubFilter ? ` · ${envSubFilter}` : leeSubFilter ? ` · ${leeSubFilter}` : actualTradeFilter ? ` · ${actualTradeFilter}` : ""}
             </span>
           )}
         </div>
 
         {/* ── Tables ── */}
-        <Table
-          title="✓ SUBMITTED"
-          data={filteredSubmitted}
-          columns={submittedColumns}
-          emptyMessage={filterDate ? `No VCRs submitted on ${filterDate}` : filterMode === 'today' ? "No VCRs submitted today" : filterMode === 'yesterday' ? "No VCRs submitted yesterday" : filterMode === '7days' ? "No VCRs in last 7 days" : "All vehicles are compliant!"}
-          onVehicleClick={fetchVcrForVehicle}
-          sortKey={submittedSort.key}
-          sortOrder={submittedSort.order}
-          onSort={handleSubmittedSort}
+        <Table title="✓ SUBMITTED" data={filteredSubmitted} columns={submittedColumns}
+          emptyMessage={filterDate ? `No VCRs submitted on ${filterDate}` : filterMode === 'today' ? "No VCRs submitted today" : filterMode === 'yesterday' ? "No VCRs submitted yesterday" : filterMode === '7days' ? "No VCRs in last 7 days" : "All engineers are compliant!"}
+          onEngineerClick={fetchVcrForVehicle}
+          sortKey={submittedSort.key} sortOrder={submittedSort.order}
+          onSort={(k) => setSubmittedSort(p => ({ key: k, order: p.key === k && p.order === 'asc' ? 'desc' : 'asc' }))}
         />
-        <Table
-          title="✗ NOT SUBMITTED"
-          data={filteredNotSubmitted}
-          columns={notSubmittedColumns}
-          emptyMessage="All vehicles have submitted reports!"
-          sortKey={notSubmittedSort.key}
-          sortOrder={notSubmittedSort.order}
-          onSort={handleNotSubmittedSort}
+        <Table title="✗ NOT SUBMITTED" data={filteredNotSubmitted} columns={notSubmittedColumns}
+          emptyMessage="All engineers have submitted reports!"
+          sortKey={notSubmittedSort.key} sortOrder={notSubmittedSort.order}
+          onSort={(k) => setNotSubmittedSort(p => ({ key: k, order: p.key === k && p.order === 'asc' ? 'desc' : 'asc' }))}
         />
       </div>
 
       {/* ── VCR Popup ── */}
       {vcrPopup.open && (
-        <div
-          onClick={() => setVcrPopup((p) => ({ ...p, open: false }))}
+        <div onClick={() => setVcrPopup(p => ({ ...p, open: false }))}
           style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(26,29,35,0.7)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
+          <div onClick={(e) => e.stopPropagation()}
             style={{ background: "#FFFFFF", borderRadius: "14px", width: "680px", maxWidth: "95vw", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: FONT }}
           >
-            {/* Popup Header */}
             <div style={{ padding: "20px 24px", borderBottom: `1px solid ${C.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#FFFFFF", zIndex: 1 }}>
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: C.primary.default }}>VCR Report</h2>
-              <button onClick={() => setVcrPopup((p) => ({ ...p, open: false }))} style={{ border: "none", background: "none", fontSize: "22px", cursor: "pointer", color: C.gray.subtle }}>✕</button>
+              <button onClick={() => setVcrPopup(p => ({ ...p, open: false }))} style={{ border: "none", background: "none", fontSize: "22px", cursor: "pointer", color: C.gray.subtle }}>✕</button>
             </div>
-
-            {/* Popup Body */}
             <div style={{ padding: "24px" }}>
               {vcrPopup.loading ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
@@ -875,19 +746,14 @@ const VehicleConditionDashboard: React.FC = () => {
               ) : vcrPopup.result ? (
                 <>
                   <h3 style={{ fontSize: "16px", fontWeight: 700, color: C.text.title, marginBottom: "16px" }}>{vcrPopup.result.vehicle}</h3>
-
                   {vcrPopup.result.latestVcr ? (
                     <div style={{ padding: "14px 16px", borderRadius: "10px", background: C.surface.successSubtle, border: `1px solid ${C.border.primary}`, marginBottom: "20px" }}>
                       <p style={{ fontSize: "11px", fontWeight: 700, color: C.success.default, margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: "0.5px" }}>Latest Report</p>
                       <p style={{ fontSize: "15px", fontWeight: 700, color: C.text.title, margin: "0 0 4px 0" }}>{vcrPopup.result.latestVcr.name}</p>
-                      <p style={{ fontSize: "13px", color: C.gray.subtle, margin: 0 }}>{vcrPopup.result.latestVcr.engineer} &nbsp;•&nbsp; {vcrPopup.result.latestVcr.createdDate}</p>
-                      {vcrPopup.result.latestVcr.description && (
-                        <p style={{ fontSize: "13px", color: C.text.body, marginTop: "8px", marginBottom: 0 }}>{vcrPopup.result.latestVcr.description}</p>
-                      )}
+                      <p style={{ fontSize: "13px", color: C.gray.subtle, margin: 0 }}>{vcrPopup.result.latestVcr.engineer} • {vcrPopup.result.latestVcr.createdDate}</p>
+                      {vcrPopup.result.latestVcr.description && <p style={{ fontSize: "13px", color: C.text.body, marginTop: "8px", marginBottom: 0 }}>{vcrPopup.result.latestVcr.description}</p>}
                     </div>
-                  ) : (
-                    <p style={{ fontSize: "13px", color: C.gray.caption, marginBottom: "16px" }}>No VCR report found</p>
-                  )}
+                  ) : <p style={{ fontSize: "13px", color: C.gray.caption, marginBottom: "16px" }}>No VCR report found</p>}
 
                   {vcrPopup.result.images.length > 0 ? (
                     <>
@@ -897,7 +763,7 @@ const VehicleConditionDashboard: React.FC = () => {
                           <div key={img.id} role="button" tabIndex={0}
                             onClick={() => { setLightboxImage(img.imageUrl); setLightboxTitle(img.title); }}
                             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setLightboxImage(img.imageUrl); setLightboxTitle(img.title); } }}
-                            style={{ cursor: "pointer", borderRadius: "8px", overflow: "hidden", border: `1px solid ${C.border.subtle}`, aspectRatio: "1", background: C.gray.negative, transition: "transform 0.2s" }}
+                            style={{ cursor: "pointer", borderRadius: "8px", overflow: "hidden", border: `1px solid ${C.border.subtle}`, aspectRatio: "1", background: C.gray.negative }}
                             onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1.05)"; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"; }}
                           >
@@ -906,25 +772,18 @@ const VehicleConditionDashboard: React.FC = () => {
                         ))}
                       </div>
                     </>
-                  ) : (
-                    <p style={{ fontSize: "13px", color: C.gray.caption }}>No images attached to this report</p>
-                  )}
+                  ) : <p style={{ fontSize: "13px", color: C.gray.caption }}>No images attached</p>}
 
-                  {/* ── AI ANALYSIS SECTION ── */}
+                  {/* AI Analysis */}
                   {vcrPopup.result.latestVcr && vcrPopup.result.images.length > 0 && (
                     <div style={{ marginTop: "24px", borderTop: `1px solid ${C.border.subtle}`, paddingTop: "20px" }}>
-
                       {!aiAnalysis && !aiLoading && (
-                        <button
-                          onClick={() => fetchAiAnalysis(vcrPopup.result!.latestVcr!.id)}
-                          style={{ width: "100%", padding: "14px", borderRadius: "10px", border: `2px solid ${C.primary.default}`, background: C.primary.default, color: "#FFFFFF", fontSize: "14px", fontWeight: 700, fontFamily: FONT, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", transition: "all 0.2s" }}
+                        <button onClick={() => fetchAiAnalysis(vcrPopup.result!.latestVcr!.id)}
+                          style={{ width: "100%", padding: "14px", borderRadius: "10px", border: `2px solid ${C.primary.default}`, background: C.primary.default, color: "#FFFFFF", fontSize: "14px", fontWeight: 700, fontFamily: FONT, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.primary.darker; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.primary.default; }}
-                        >
-                          🤖 Analyse Images with AI
-                        </button>
+                        >🤖 Analyse Images with AI</button>
                       )}
-
                       {aiLoading && (
                         <div style={{ textAlign: "center", padding: "32px", background: C.surface.primarySubtle, borderRadius: "10px", border: `1px solid ${C.border.primary}` }}>
                           <div style={{ width: "36px", height: "36px", borderRadius: "50%", border: `3px solid ${C.border.subtle}`, borderTop: `3px solid ${C.primary.default}`, animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
@@ -932,142 +791,63 @@ const VehicleConditionDashboard: React.FC = () => {
                           <p style={{ color: C.gray.caption, fontSize: "12px", margin: 0 }}>This may take 10–30 seconds</p>
                         </div>
                       )}
-
-                      {aiError && (
-                        <div style={{ padding: "14px 16px", background: C.surface.errorSubtle, border: `1px solid ${C.border.error}`, borderRadius: "10px", color: C.error.default, fontSize: "13px", fontWeight: 500 }}>
-                          ⚠️ {aiError}
-                        </div>
-                      )}
-
+                      {aiError && <div style={{ padding: "14px 16px", background: C.surface.errorSubtle, border: `1px solid ${C.border.error}`, borderRadius: "10px", color: C.error.default, fontSize: "13px", fontWeight: 500 }}>⚠️ {aiError}</div>}
                       {aiAnalysis && (
                         <div>
-                          {/* Overall status banner */}
-                          <div style={{
-                            padding: "14px 18px", borderRadius: "10px", marginBottom: "16px",
-                            background: aiAnalysis.overall_fleet_status === "GREEN" ? C.surface.successSubtle : aiAnalysis.overall_fleet_status === "RED" ? C.surface.errorSubtle : C.surface.warningSubtle,
-                            border: `1.5px solid ${aiAnalysis.overall_fleet_status === "GREEN" ? "#A8D5BA" : aiAnalysis.overall_fleet_status === "RED" ? C.border.error : C.border.warning}`,
-                            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
-                          }}>
+                          <div style={{ padding: "14px 18px", borderRadius: "10px", marginBottom: "16px", background: aiAnalysis.overall_fleet_status === "GREEN" ? C.surface.successSubtle : aiAnalysis.overall_fleet_status === "RED" ? C.surface.errorSubtle : C.surface.warningSubtle, border: `1.5px solid ${aiAnalysis.overall_fleet_status === "GREEN" ? "#A8D5BA" : aiAnalysis.overall_fleet_status === "RED" ? C.border.error : C.border.warning}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                             <div>
                               <p style={{ margin: "0 0 2px 0", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: C.gray.subtle }}>AI Fleet Assessment</p>
-                              <p style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: C.text.title }}>{aiAnalysis.engineer} &nbsp;·&nbsp; {aiAnalysis.vehicle} &nbsp;·&nbsp; {aiAnalysis.reg_no}</p>
-                              <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: C.gray.caption }}>Analysed {aiAnalysis.analysed_at} &nbsp;·&nbsp; {aiAnalysis.total_images} image{aiAnalysis.total_images !== 1 ? "s" : ""} reviewed</p>
+                              <p style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: C.text.title }}>{aiAnalysis.engineer} · {aiAnalysis.vehicle} · {aiAnalysis.reg_no}</p>
+                              <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: C.gray.caption }}>Analysed {aiAnalysis.analysed_at} · {aiAnalysis.total_images} image{aiAnalysis.total_images !== 1 ? "s" : ""} reviewed</p>
                             </div>
-                            <div style={{
-                              padding: "8px 16px", borderRadius: "8px", fontWeight: 800, fontSize: "14px", whiteSpace: "nowrap",
-                              background: aiAnalysis.overall_fleet_status === "GREEN" ? C.success.default : aiAnalysis.overall_fleet_status === "RED" ? C.error.default : C.warning.default,
-                              color: "#FFFFFF",
-                            }}>
+                            <div style={{ padding: "8px 16px", borderRadius: "8px", fontWeight: 800, fontSize: "14px", whiteSpace: "nowrap", background: aiAnalysis.overall_fleet_status === "GREEN" ? C.success.default : aiAnalysis.overall_fleet_status === "RED" ? C.error.default : C.warning.default, color: "#FFFFFF" }}>
                               {aiAnalysis.overall_fleet_status === "GREEN" ? "✓ ALL CLEAR" : aiAnalysis.overall_fleet_status === "RED" ? "✗ ACTION NEEDED" : "⚠ MONITOR"}
                             </div>
                           </div>
-
-                          {/* Per-image report cards */}
-                          <div style={{ marginTop: "20px" }}>
-                            {/* Filter buttons */}
-                            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-                              {(["all", "red", "amber", "green"] as const).map((f) => {
-                                const labels: Record<string, string> = {
-                                  all:   `All (${aiAnalysis.reports.length})`,
-                                  red:   `✗ Action Needed (${aiAnalysis.reports.filter(r => r.overall_condition === "RED").length})`,
-                                  amber: `⚠ Needs Monitoring (${aiAnalysis.reports.filter(r => r.overall_condition === "AMBER").length})`,
-                                  green: `✓ Good Condition (${aiAnalysis.reports.filter(r => r.overall_condition === "GREEN").length})`,
-                                };
-                                const activeBg: Record<string, string> = {
-                                  all:   C.primary.default,
-                                  red:   C.error.default,
-                                  amber: C.warning.default,
-                                  green: C.success.default,
-                                };
-                                const isActive = aiAnalysisFilter === f;
-                                return (
-                                  <button key={f} onClick={() => setAiAnalysisFilter(f)}
-                                    style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: isActive ? activeBg[f] : C.gray.negative, color: isActive ? "#FFFFFF" : C.text.body, fontSize: "12px", fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}
-                                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.85"; }}
-                                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
-                                  >
-                                    {labels[f]}
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {/* Filtered report cards */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                              {aiAnalysis.reports
-                                .filter(report => aiAnalysisFilter === "all" || report.overall_condition === aiAnalysisFilter.toUpperCase())
-                                .map((report, idx) => {
-                                  const condColor =
-                                    report.overall_condition === "GREEN" ? C.success.default :
-                                    report.overall_condition === "RED"   ? C.error.default   : C.warning.default;
-                                  const condLabel =
-                                    report.overall_condition === "GREEN" ? "✓  Good Condition" :
-                                    report.overall_condition === "RED"   ? "✗  Action Needed"  : "⚠  Needs Monitoring";
-                                  const actionIsNone = !report.action_required || report.action_required === "None";
-                                  const tags = [
-                                    report.damage_detected ? { text: "Damage", color: C.error.default } : null,
-                                    report.cleanliness && report.cleanliness !== "Clean" ? { text: report.cleanliness, color: C.warning.default } : null,
-                                    report.tyres_visible && report.tyre_condition && report.tyre_condition !== "Good" && report.tyre_condition !== "Not Visible" ? { text: `Tyres: ${report.tyre_condition}`, color: C.warning.default } : null,
-                                    report.lights_condition && report.lights_condition === "Damaged" ? { text: "Lights Damaged", color: C.error.default } : null,
-                                  ].filter(Boolean) as { text: string; color: string }[];
-
-                                  const matchingImage = vcrPopup.result?.images?.find(img =>
-                                    img.title.includes(report.image_title) || report.image_title.includes(img.title)
-                                  );
-
-                                  return (
-                                    <div
-                                      key={idx}
-                                      style={{ borderRadius: "12px", background: "#FFFFFF", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", display: "flex", transition: "all 0.2s ease", minHeight: "180px" }}
-                                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.12)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
-                                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.07)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"; }}
-                                    >
-                                      {matchingImage && (
-                                        <div
-                                          role="button" tabIndex={0}
-                                          onClick={() => { setLightboxImage(matchingImage.imageUrl); setLightboxTitle(report.image_title); }}
-                                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setLightboxImage(matchingImage.imageUrl); setLightboxTitle(report.image_title); } }}
-                                          style={{ width: "160px", minWidth: "160px", height: "100%", background: C.gray.negative, overflow: "hidden", cursor: "pointer" }}
-                                        >
-                                          <img src={matchingImage.imageUrl} alt={report.image_title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                        </div>
-                                      )}
-                                      <div style={{ width: "6px", flexShrink: 0, background: condColor }} />
-                                      <div style={{ flex: 1, padding: "16px 18px" }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "6px" }}>
-                                          <span style={{ padding: "5px 14px", borderRadius: "20px", background: condColor, color: "#FFF", fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>
-                                            {condLabel}
-                                          </span>
-                                        </div>
-                                        <p style={{ margin: "10px 0", fontSize: "13px", color: C.text.body, lineHeight: 1.65 }}>{report.inspector_notes}</p>
-                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${C.border.subtle}` }}>
-                                          {tags.length > 0 ? tags.map((tag) => (
-                                            <span key={tag.text} style={{ padding: "3px 10px", borderRadius: "20px", background: `${tag.color}15`, color: tag.color, fontSize: "11px", fontWeight: 700, border: `1px solid ${tag.color}30` }}>
-                                              {tag.text}
-                                            </span>
-                                          )) : (
-                                            <span style={{ padding: "3px 10px", borderRadius: "20px", background: C.surface.successSubtle, color: C.success.default, fontSize: "11px", fontWeight: 700, border: `1px solid #A8D5BA` }}>
-                                              No Issues Found
-                                            </span>
-                                          )}
-                                          <span style={{ marginLeft: "auto", padding: "3px 12px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, background: actionIsNone ? C.surface.successSubtle : C.surface.errorSubtle, color: actionIsNone ? C.success.default : C.error.default, border: `1px solid ${actionIsNone ? "#A8D5BA" : C.border.error}` }}>
-                                            {actionIsNone ? "✓ No Action Required" : `⚠ ${report.action_required}`}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                            </div>
+                          <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+                            {(["all", "red", "amber", "green"] as const).map((f) => {
+                              const labels = { all: `All (${aiAnalysis.reports.length})`, red: `✗ Action Needed (${aiAnalysis.reports.filter(r => r.overall_condition === "RED").length})`, amber: `⚠ Monitor (${aiAnalysis.reports.filter(r => r.overall_condition === "AMBER").length})`, green: `✓ Good (${aiAnalysis.reports.filter(r => r.overall_condition === "GREEN").length})` };
+                              const activeBg = { all: C.primary.default, red: C.error.default, amber: C.warning.default, green: C.success.default };
+                              const isActive = aiAnalysisFilter === f;
+                              return <button key={f} onClick={() => setAiAnalysisFilter(f)} style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: isActive ? activeBg[f] : C.gray.negative, color: isActive ? "#FFFFFF" : C.text.body, fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>{labels[f]}</button>;
+                            })}
                           </div>
-
-                          {/* Reset button */}
-                          <button
-                            onClick={() => { setAiAnalysis(null); setAiError(""); setAiAnalysisFilter("all"); }}
-                            style={{ marginTop: "16px", width: "100%", padding: "10px", borderRadius: "8px", border: `1px solid ${C.border.subtle}`, background: C.gray.negative, color: C.gray.subtle, fontSize: "12px", fontWeight: 600, fontFamily: FONT, cursor: "pointer" }}
-                          >
-                            ↺ Reset Analysis
-                          </button>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                            {aiAnalysis.reports.filter(r => aiAnalysisFilter === "all" || r.overall_condition === aiAnalysisFilter.toUpperCase()).map((report, idx) => {
+                              const condColor = report.overall_condition === "GREEN" ? C.success.default : report.overall_condition === "RED" ? C.error.default : C.warning.default;
+                              const condLabel = report.overall_condition === "GREEN" ? "✓ Good Condition" : report.overall_condition === "RED" ? "✗ Action Needed" : "⚠ Needs Monitoring";
+                              const actionIsNone = !report.action_required || report.action_required === "None";
+                              const tags = [
+                                report.damage_detected ? { text: "Damage", color: C.error.default } : null,
+                                report.cleanliness && report.cleanliness !== "Clean" ? { text: report.cleanliness, color: C.warning.default } : null,
+                                report.tyres_visible && report.tyre_condition && !["Good","Not Visible"].includes(report.tyre_condition) ? { text: `Tyres: ${report.tyre_condition}`, color: C.warning.default } : null,
+                                report.lights_condition === "Damaged" ? { text: "Lights Damaged", color: C.error.default } : null,
+                              ].filter(Boolean) as { text: string; color: string }[];
+                              const matchingImage = vcrPopup.result?.images?.find(img => img.title.includes(report.image_title) || report.image_title.includes(img.title));
+                              return (
+                                <div key={idx} style={{ borderRadius: "12px", background: "#FFFFFF", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", display: "flex", minHeight: "180px" }}
+                                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.12)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
+                                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.07)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"; }}
+                                >
+                                  {matchingImage && (
+                                    <div role="button" tabIndex={0} onClick={() => { setLightboxImage(matchingImage.imageUrl); setLightboxTitle(report.image_title); }} style={{ width: "160px", minWidth: "160px", cursor: "pointer", overflow: "hidden" }}>
+                                      <img src={matchingImage.imageUrl} alt={report.image_title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                    </div>
+                                  )}
+                                  <div style={{ width: "6px", flexShrink: 0, background: condColor }} />
+                                  <div style={{ flex: 1, padding: "16px 18px" }}>
+                                    <span style={{ padding: "5px 14px", borderRadius: "20px", background: condColor, color: "#FFF", fontSize: "12px", fontWeight: 700 }}>{condLabel}</span>
+                                    <p style={{ margin: "10px 0", fontSize: "13px", color: C.text.body, lineHeight: 1.65 }}>{report.inspector_notes}</p>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${C.border.subtle}` }}>
+                                      {tags.length > 0 ? tags.map((tag) => <span key={tag.text} style={{ padding: "3px 10px", borderRadius: "20px", background: `${tag.color}15`, color: tag.color, fontSize: "11px", fontWeight: 700, border: `1px solid ${tag.color}30` }}>{tag.text}</span>) : <span style={{ padding: "3px 10px", borderRadius: "20px", background: C.surface.successSubtle, color: C.success.default, fontSize: "11px", fontWeight: 700, border: "1px solid #A8D5BA" }}>No Issues Found</span>}
+                                      <span style={{ marginLeft: "auto", padding: "3px 12px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, background: actionIsNone ? C.surface.successSubtle : C.surface.errorSubtle, color: actionIsNone ? C.success.default : C.error.default, border: `1px solid ${actionIsNone ? "#A8D5BA" : C.border.error}` }}>{actionIsNone ? "✓ No Action Required" : `⚠ ${report.action_required}`}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <button onClick={() => { setAiAnalysis(null); setAiError(""); setAiAnalysisFilter("all"); }} style={{ marginTop: "16px", width: "100%", padding: "10px", borderRadius: "8px", border: `1px solid ${C.border.subtle}`, background: C.gray.negative, color: C.gray.subtle, fontSize: "12px", fontWeight: 600, fontFamily: FONT, cursor: "pointer" }}>↺ Reset Analysis</button>
                         </div>
                       )}
                     </div>
@@ -1079,12 +859,9 @@ const VehicleConditionDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ── Lightbox ── */}
       <Lightbox image={lightboxImage} title={lightboxTitle} onClose={() => setLightboxImage(null)} />
-
-      {/* ── KPI Modals ── */}
-      <ListModal isOpen={modalOpen === "submitted"}    title="✓ SUBMITTED"    data={filteredSubmitted}    columns={submittedColumns}    onClose={() => setModalOpen(null)} color="green" />
-      <ListModal isOpen={modalOpen === "notSubmitted"} title="✗ NOT SUBMITTED" data={filteredNotSubmitted}  columns={notSubmittedColumns} onClose={() => setModalOpen(null)} color="red"   />
+      <ListModal isOpen={modalOpen === "submitted"}    title="✓ SUBMITTED"     data={filteredSubmitted}    columns={submittedColumns}    onClose={() => setModalOpen(null)} color="green" />
+      <ListModal isOpen={modalOpen === "notSubmitted"} title="✗ NOT SUBMITTED" data={filteredNotSubmitted} columns={notSubmittedColumns} onClose={() => setModalOpen(null)} color="red" />
     </div>
   );
 };
