@@ -14,11 +14,52 @@ export default function Login() {
   useEffect(() => {
     console.log("=== Login Component Mounted ===");
 
+    // ✅ EMBED MODE — token in URL means we're inside Navigator's iframe
+    // Skip Microsoft auth entirely, verify the embed token server-side instead
+    const embedToken = searchParams.get("token");
+    if (embedToken) {
+      console.log("🔗 Embed token detected — verifying with backend...");
+      setLoading(true);
+
+      fetch(`/api/auth/verify-embed-token?token=${encodeURIComponent(embedToken)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.valid) {
+            console.log("✅ Embed token valid — creating local session");
+            const sessionId = "embed-" + embedToken.slice(-12);
+            const userData = {
+              name: "Navigator User",
+              email: "embed@navigator",
+              session: sessionId,
+              trade: "ALL",
+            };
+            sessionStorage.setItem("user_session", sessionId);
+            sessionStorage.setItem("user_data", JSON.stringify(userData));
+            // Remove token from URL so it doesn't stay visible, then go to dashboard
+            window.history.replaceState({}, document.title, "/");
+            navigate("/", { replace: true });
+          } else {
+            console.error("❌ Embed token invalid:", data);
+            setError("Invalid embed token. Please reload Navigator.");
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          console.error("❌ Embed token verification failed:", err);
+          setError("Could not verify embed token. Please try reloading.");
+          setLoading(false);
+        });
+
+      return; // ⛔ Stop here — never fall through to Microsoft OAuth
+    }
+
+    // ── Normal (non-embed) flow below ────────────────────────────────────────
+
     const errorParam = searchParams.get("error");
     const user = searchParams.get("user");
     const userEmail = searchParams.get("email");
     const session = searchParams.get("session");
-    const trade = searchParams.get("trade"); // ✅ trade filter from backend
+    const trade = searchParams.get("trade");
 
     if (errorParam) {
       console.error("❌ OAuth error:", errorParam);
@@ -33,17 +74,14 @@ export default function Login() {
 
     if (user && userEmail && session) {
       console.log("✅ OAuth successful:", user, "| Trade:", trade);
-
-      // ✅ Save everything including trade to sessionStorage
       const userData = {
         name: user,
         email: userEmail,
         session,
-        trade: trade || "ALL", // "ALL" = no restriction, else e.g. "Drainage & Plumbing"
+        trade: trade || "ALL",
       };
       sessionStorage.setItem("user_session", session);
       sessionStorage.setItem("user_data", JSON.stringify(userData));
-
       setWelcomeName(user);
       setTimeout(() => {
         window.history.replaceState({}, document.title, "/");
@@ -62,6 +100,11 @@ export default function Login() {
   }, [navigate, searchParams]);
 
   const handleMicrosoftLogin = async () => {
+    // ✅ Block Microsoft OAuth if we're inside an iframe
+    if (window.self !== window.top) {
+      setError("Please log in via the Navigator application.");
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -74,7 +117,28 @@ export default function Login() {
     }
   };
 
-  // ✅ WELCOME BACK SCREEN
+  // ── Loading screen (shown while verifying embed token) ───────────────────
+  if (loading && !error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden text-center">
+            <div className="px-8 py-12">
+              <div className="flex items-center justify-center mx-auto mb-4 w-20 h-20">
+                <img src="/aspect-logo-icon.svg" alt="ASPECT Logo" className="w-full h-full object-contain" />
+              </div>
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <span className="text-slate-600 text-sm">Verifying access...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Welcome back screen ───────────────────────────────────────────────────
   if (welcomeName) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-slate-50 flex flex-col items-center justify-center p-4">
@@ -99,7 +163,7 @@ export default function Login() {
     );
   }
 
-  // ❌ UNAUTHORIZED SCREEN
+  // ── Unauthorized screen ───────────────────────────────────────────────────
   if (unauthorized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-slate-50 flex flex-col items-center justify-center p-4">
@@ -125,7 +189,11 @@ export default function Login() {
                 disabled={loading}
                 className="w-full py-3 px-6 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2"
               >
-                {loading ? <><Loader2 className="h-4 w-4 animate-spin" /><span>Connecting...</span></> : <span>Try a different account</span>}
+                {loading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /><span>Connecting...</span></>
+                ) : (
+                  <span>Try a different account</span>
+                )}
               </button>
             </div>
             <div className="px-8 py-4 bg-slate-50 border-t border-slate-200">
@@ -140,7 +208,7 @@ export default function Login() {
     );
   }
 
-  // ✅ NORMAL LOGIN SCREEN
+  // ── Normal login screen ───────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -167,7 +235,7 @@ export default function Login() {
               onClick={handleMicrosoftLogin}
               disabled={loading}
               className="w-full py-4 px-6 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-3 shadow-md hover:shadow-lg"
-              style={{ backgroundColor: '#17325E' }}
+              style={{ backgroundColor: "#17325E" }}
             >
               {loading ? (
                 <><Loader2 className="h-5 w-5 animate-spin" /><span>Connecting to Microsoft...</span></>
@@ -199,8 +267,16 @@ export default function Login() {
         <div className="mt-6 text-center">
           <p className="text-sm text-slate-600">
             Need help?{" "}
-            <a href="#" onClick={(e) => { e.preventDefault(); alert("Please contact your IT administrator for support."); }}
-              className="text-blue-600 hover:text-blue-700 font-medium hover:underline">Contact Support</a>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                alert("Please contact your IT administrator for support.");
+              }}
+              className="text-blue-600 hover:text-blue-700 font-medium hover:underline"
+            >
+              Contact Support
+            </a>
           </p>
         </div>
         <div className="mt-8 text-center text-xs text-slate-500">
