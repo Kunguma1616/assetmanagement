@@ -45,39 +45,6 @@ type SheetType = 'current' | 'allocated' | 'garage' | 'spare_ready' | 'reserved'
 /* ─────────────────────────────────────────────────
    COPILOT AI BUTTON  →  brand yellow, zero white
    ───────────────────────────────────────────────── */
-const floatingCopilotButtonStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '0px',
-  minHeight: '64px',
-  minWidth: '120px',
-  padding: '0',
-  background: '#F1FF24',                          /* ✅ brand yellow — no white */
-  color: '#17325E',                               /* dark navy text */
-  borderRadius: '0',
-  border: '2px solid transparent',
-  cursor: 'pointer',
-  fontSize: '16px',
-  fontWeight: 700,
-  fontFamily: 'Mont, sans-serif',
-  letterSpacing: '-0.01em',
-  lineHeight: 1.1,
-  transition: 'all 0.2s ease',
-  background: '#FFFFFF',
-  color: '#17325E',
-  border: '1px solid rgba(23, 50, 94, 0.12)',
-  boxShadow: '0 18px 40px rgba(15, 23, 42, 0.2)',
-  background: 'transparent',
-  border: 'none',
-  boxShadow: 'none',
-  whiteSpace: 'nowrap',
-  position: 'fixed',
-  right: '24px',
-  bottom: '24px',
-  zIndex: 30,
-};
-
 /* ─────────────────────────────────────────────────
    START GUIDE BUTTON  →  frosted glass, white text
    ───────────────────────────────────────────────── */
@@ -104,25 +71,6 @@ const guideButtonStyle: React.CSSProperties = {
   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
   backdropFilter: 'blur(8px)',
   whiteSpace: 'nowrap',
-  flexShrink: 0,
-};
-
-/* Logo — large enough to be clearly visible */
-const copilotLogoStyle: React.CSSProperties = {
-  width: '170px',
-  height: '68px',
-  flexShrink: 0,
-  objectFit: 'contain',
-  display: 'block',
-};
-
-const copilotLogoWrapStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '170px',
-  height: '68px',
-  padding: '0',
   flexShrink: 0,
 };
 
@@ -248,7 +196,7 @@ const FleetDashboard: React.FC = () => {
         <div className="text-center">
           <AlertTriangle className="w-16 h-16 mx-auto mb-4" style={{ color: '#D15134' }} />
           <div className="text-xl font-semibold" style={{ color: '#1A1D23' }}>{error}</div>
-          <button onClick={() => fetchVehicleSummary()} className="mt-4" style={{ ...floatingCopilotButtonStyle, background: '#17325E', color: '#F1FF24', boxShadow: '0 14px 28px rgba(23,50,94,0.22)' }}>
+          <button onClick={() => fetchVehicleSummary()} className="mt-4" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 18px', borderRadius: 12, background: '#17325E', color: '#F1FF24', border: 'none', boxShadow: '0 14px 28px rgba(23,50,94,0.22)', fontWeight: 700, fontFamily: 'Mont, sans-serif', cursor: 'pointer' }}>
             <RefreshCw className="w-5 h-5" /><span>Retry Connection</span>
           </button>
         </div>
@@ -312,22 +260,6 @@ const FleetDashboard: React.FC = () => {
       </div>
 
       {/* ─── KPI Grid ─── */}
-      <button
-        id="ai-btn"
-        onClick={() => navigate('/chatbot')}
-        style={floatingCopilotButtonStyle}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'translateY(-2px)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)';
-        }}
-      >
-        <div style={copilotLogoWrapStyle}>
-          <img src="/chumley-copilot-ai-v2.svg" alt="Chumley" style={copilotLogoStyle} />
-        </div>
-      </button>
-
       <div className="px-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 

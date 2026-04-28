@@ -492,26 +492,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
               <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
               {!collapsed && <span style={{ fontFamily: 'MontBold, sans-serif' }}>Log out</span>}
             </button>
-            {!collapsed && (
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                gap: 6, paddingTop: 4,
-              }}>
-                <span style={{
-                  fontSize: 10, color: C.caption,
-                  fontFamily: "MontRegular, sans-serif",
-                }}>Powered by:</span>
-                <img
-                  src="/new-chumley-logo-DN4SLe0d.svg"
-                  alt="Chumley"
-                  style={{ height: 18, width: "auto" }}
-                  onError={(e) => {
-                    const t = e.target as HTMLImageElement;
-                    t.src = "/chumley-copilot-ai-v1.svg";
-                  }}
-                />
-              </div>
-            )}
           </div>
 
         </aside>
@@ -528,6 +508,58 @@ export default function MainLayout({ children }: MainLayoutProps) {
         }}>
           {children}
         </div>
+
+        <button
+          onClick={() => navigate("/chatbot")}
+          title="Open Chumley Agent"
+          aria-label="Open Chumley Agent"
+          style={{
+            position: "fixed",
+            right: 12,
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 80,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+            width: 62,
+            minHeight: 236,
+            padding: "22px 10px",
+            borderRadius: "24px 0 0 24px",
+            border: copilotActive ? `2px solid ${C.yellow}` : "none",
+            background: "linear-gradient(180deg, #EF4444 0%, #F97316 100%)",
+            color: C.white,
+            boxShadow: "0 18px 32px rgba(239, 68, 68, 0.28)",
+            cursor: "pointer",
+          }}
+        >
+          <span
+            style={{
+              color: C.white,
+              flexShrink: 0,
+              fontSize: 18,
+              lineHeight: 1,
+              fontFamily: "MontBold, sans-serif",
+            }}
+          >
+            ✦
+          </span>
+          <span
+            style={{
+              writingMode: "vertical-rl",
+              textOrientation: "mixed",
+              fontSize: 12,
+              fontWeight: 800,
+              letterSpacing: "0.22em",
+              textTransform: "uppercase",
+              fontFamily: "MontBold, sans-serif",
+            }}
+          >
+            Chumley Agent
+          </span>
+        </button>
       </div>
     );
   }
