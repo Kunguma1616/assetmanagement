@@ -57,6 +57,7 @@ ROLE_TRADE_MAP: Dict[str, Optional[List[str]]] = {
     # ── Admin ─────────────────────────────────────────────────────────────────
     "app.admin": None,   # App Role value set to "app.admin" in Azure
     "Admin":     None,   # ✅ FIX: App Role value set to "Admin" in Azure (display name used as value)
+    "admin":     None,   # Lowercase role sent by Navigator/custom JWT
 
     # ── TGMs ──────────────────────────────────────────────────────────────────
     "tgm.hvac_gas_elec": [
@@ -116,6 +117,22 @@ def normalise_trade(trade: Union[None, str, list]) -> str:
     if isinstance(trade, list):
         return ",".join(trade)
     return trade
+
+
+def get_trade_from_role_claim(role_value: str) -> Any:
+    """
+    Resolve a single role claim from an embed JWT before falling back to Graph.
+    Returns "UNAUTHORIZED" when the claim is empty or unknown.
+    """
+    role = (role_value or "").strip()
+    if not role:
+        return "UNAUTHORIZED"
+
+    for candidate in (role, role.lower()):
+        if candidate in ROLE_TRADE_MAP:
+            return ROLE_TRADE_MAP[candidate]
+
+    return "UNAUTHORIZED"
 
 
 def resolve_trade_from_roles(roles: List[str]) -> Any:
@@ -390,8 +407,23 @@ async def embed_login(body: EmbedLoginRequest) -> Dict[str, Any]:
     print(f"\n🔗 Embed-login: {body.email}")
     if not _verify_embed_token(body.embed_token, body.email):
         raise HTTPException(status_code=401, detail="Invalid or expired embed token.")
-    roles     = _get_user_roles_from_graph(body.email)
-    trade_raw = resolve_trade_from_roles(roles)
+
+    trade_raw = "UNAUTHORIZED"
+    try:
+        payload = pyjwt.decode(body.embed_token, EMBED_SECRET, algorithms=["HS256"])
+        jwt_role = payload.get("role", "")
+        print(f"🔑 Embed-login JWT role claim: '{jwt_role}' for {body.email}")
+        trade_raw = get_trade_from_role_claim(jwt_role)
+        if trade_raw != "UNAUTHORIZED":
+            print(f"✅ Using JWT role '{jwt_role}' directly for embed-login")
+    except pyjwt.InvalidTokenError:
+        # This route may still receive the custom HMAC token format.
+        pass
+
+    if trade_raw == "UNAUTHORIZED":
+        roles     = _get_user_roles_from_graph(body.email)
+        trade_raw = resolve_trade_from_roles(roles)
+
     if trade_raw == "UNAUTHORIZED":
         raise HTTPException(status_code=403, detail="User not authorised.")
     user_trade = normalise_trade(trade_raw)
@@ -420,8 +452,18 @@ async def exchange_embed_token(token: str = Query(...)) -> Dict[str, Any]:
     name  = payload.get("name", "")
     if not email:
         raise HTTPException(status_code=400, detail="Token missing email claim.")
-    roles     = _get_user_roles_from_graph(email)
-    trade_raw = resolve_trade_from_roles(roles)
+
+    jwt_role = payload.get("role", "")
+    print(f"🔑 exchange-embed-token JWT role claim: '{jwt_role}' for {email}")
+    trade_raw = get_trade_from_role_claim(jwt_role)
+
+    if trade_raw != "UNAUTHORIZED":
+        print(f"✅ Using JWT role '{jwt_role}' directly — skipping Graph lookup")
+    else:
+        print(f"⚠️ JWT role '{jwt_role}' not mapped — falling back to Graph lookup")
+        roles     = _get_user_roles_from_graph(email)
+        trade_raw = resolve_trade_from_roles(roles)
+
     if trade_raw == "UNAUTHORIZED":
         raise HTTPException(status_code=403, detail="User not authorised.")
     user_trade = normalise_trade(trade_raw)
