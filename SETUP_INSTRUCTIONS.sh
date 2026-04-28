@@ -1,0 +1,120 @@
+#!/bin/bash
+# Setup Instructions for Vehicle Asset Upload System
+
+echo "🚀 Fleet Health Monitor - Vehicle Asset System Setup"
+echo "=========================================================="
+echo ""
+
+# Backend setup
+echo "📦 Backend Setup:"
+echo "1. Ensure all dependencies are installed:"
+echo "   pip install -r backend/requirements.txt"
+echo ""
+echo "2. Required backend routes are already registered in app.py:"
+echo "   ✅ /api/vehicles/* (vehicle lookup)"
+echo "   ✅ /api/assets/* (asset management)"
+echo "   ✅ /api/ai/* (AI analysis)"
+echo ""
+
+# Frontend setup
+echo "🎨 Frontend Setup:"
+echo "1. New pages available:"
+echo "   ✅ /upload - Upload and search vehicles"
+echo "   ✅ /assets - View all uploaded vehicles"
+echo "   ✅ /assets/:id - Detailed asset view"
+echo ""
+
+# Environment variables
+echo "🔑 Environment Variables Required:"
+echo "Backend (.env file):"
+echo "  SALESFORCE_USERNAME=your_sf_username"
+echo "  SALESFORCE_PASSWORD=your_sf_password"
+echo "  SALESFORCE_SECURITY_TOKEN=your_token"
+echo "  SALESFORCE_CLIENT_ID=your_client_id"
+echo "  SALESFORCE_CLIENT_SECRET=your_secret"
+echo "  ANTHROPIC_API_KEY=your_claude_api_key (optional, for AI analysis)"
+echo ""
+
+# Database schema
+echo "📊 Database Schema:"
+echo "Vehicle__c (Salesforce Object):"
+echo "  - Id (PK)"
+echo "  - Name (Vehicle Name)"
+echo "  - Van_Number__c (Van Number)"
+echo "  - Reg_No__c (Registration Number)"
+echo "  - Tracking_Number__c (Tracking Number)"
+echo "  - Vehicle_Type__c (Type of vehicle)"
+echo "  - Description (Text area)"
+echo "  - Status__c (Uploaded/Allocated/Spare/Reserved/Written Off)"
+echo "  - CreatedDate (Auto)"
+echo ""
+
+# Testing endpoints
+echo "🧪 Testing Endpoints:"
+echo ""
+echo "1. Lookup Vehicle by Van Number:"
+echo "   curl -X GET http://localhost:8000/api/vehicles/lookup/379"
+echo ""
+echo "2. Get All Assets:"
+echo "   curl -X GET http://localhost:8000/api/assets/all"
+echo ""
+echo "3. Get Asset by Van Number:"
+echo "   curl -X GET http://localhost:8000/api/assets/by-van/379"
+echo ""
+echo "4. Create New Asset:"
+echo '   curl -X POST http://localhost:8000/api/assets/create \'
+echo '     -H "Content-Type: application/json" \'
+echo "     -d '{...asset data...}'"
+echo ""
+echo "5. Extract Image Details:"
+echo '   curl -X POST http://localhost:8000/api/ai/extract-vehicle-details \'
+echo "     -F \"image=@vehicle.jpg\" \\"
+echo "     -F \"van_number=379\""
+echo ""
+
+# Running the application
+echo "▶️  Running the Application:"
+echo ""
+echo "Terminal 1 - Backend:"
+echo "  cd backend"
+echo "  python -m uvicorn app:app --reload --port 8000"
+echo ""
+echo "Terminal 2 - Frontend:"
+echo "  npm run dev"
+echo ""
+
+# Access the application
+echo "🌐 Access the Application:"
+echo "  Upload Page: http://localhost:5173/upload"
+echo "  Assets Gallery: http://localhost:5173/assets"
+echo ""
+
+# Features Overview
+echo "✨ Features:"
+echo ""
+echo "Upload Page (/upload):"
+echo "  ✅ Image upload with preview"
+echo "  ✅ Van number auto-search"
+echo "  ✅ Auto-fetch registration, tracking, driver history"
+echo "  ✅ AI-powered image analysis"
+echo "  ✅ Save as asset"
+echo ""
+echo "Assets Gallery (/assets):"
+echo "  ✅ Grid view of all vehicles"
+echo "  ✅ Real-time search/filter"
+echo "  ✅ Status badges"
+echo "  ✅ Quick info cards"
+echo "  ✅ Sort by date"
+echo ""
+echo "Asset Detail (/assets/:id):"
+echo "  ✅ Full vehicle information"
+echo "  ✅ Vehicle image display"
+echo "  ✅ Complete driver history"
+echo "  ✅ AI analysis report"
+echo "  ✅ Export functionality"
+echo "  ✅ Delete option"
+echo ""
+
+echo "=========================================================="
+echo "✅ Setup complete! Start the development servers above."
+echo "=========================================================="

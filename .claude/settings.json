@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Kunguma.Balaji/.claude/projects/c--Users-Kunguma-Balaji-Downloads-FLEET-FULL-STACK--main--1--FLEET-FULL-STACK--main/memory/**)",
+      "Read(//c/Users/Kunguma.Balaji/Downloads/**)",
+      "Read(//c/Users/Kunguma.Balaji/.claude/projects/c--Users-Kunguma-Balaji-Downloads-FLEET-FULL-STACK--main--1--FLEET-FULL-STACK--main/f921145d-d7d7-4fd9-abff-aef122107442/tool-results/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Kunguma.Balaji\\Downloads\\assetmanagement-main (3)\\assetmanagement-main\\backend\\routes"
+    ]
+  }
+}
