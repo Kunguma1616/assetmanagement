@@ -2,9 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from starlette.middleware.base import BaseHTTPMiddleware   # ✅ NEW: for iframe headers
-import jwt                                                  # ✅ NEW: for embed token
-import datetime                                             # ✅ NEW: for token expiry
+from starlette.middleware.base import BaseHTTPMiddleware
+import jwt
+import datetime
 import sys
 import os
 import asyncio
@@ -103,6 +103,7 @@ print("[OK] All imports successful — starting FastAPI app")
 
 # ─── APP ──────────────────────────────────────────────────────────────────────
 GLOBAL_DRIVER_CACHE = []
+EMBED_SECRET_KEY = os.environ.get("EMBED_SECRET_KEY", "aspect-asset-embed-secret-2024")
 
 app = FastAPI(
     title="Fleet Health Monitor API",
@@ -110,7 +111,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# ✅ NEW: Iframe / embed headers middleware (allows app to be embedded in iframes)
+# ✅ Iframe / embed headers middleware — allows app to load inside Navigator's iframe
 class FrameHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -129,6 +130,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://192.168.54.48:5174",
+        "https://agent-performance-dashboard-686896919440.europe-west2.run.app",
         "*"
     ],
     allow_credentials=True,
@@ -212,11 +214,11 @@ async def health():
     return {"status": "healthy"}
 
 
-# ✅ NEW: Embed token endpoint — visit this URL once to get your 1-year token
-EMBED_SECRET_KEY = os.environ.get("EMBED_SECRET_KEY", "aspect-asset-embed-secret-2024")
+# ─── EMBED TOKEN ENDPOINTS ────────────────────────────────────────────────────
 
 @app.get("/api/generate-embed-token")
 async def generate_embed_token():
+    """Visit once to generate your 1-year embed token."""
     expiry = datetime.datetime.utcnow() + datetime.timedelta(days=365)
     payload = {
         "app": "aspect-asset-management",
@@ -231,6 +233,29 @@ async def generate_embed_token():
         "embed_url": f"{base_url}?token={token}",
         "iframe_code": f'<iframe src="{base_url}?token={token}" width="100%" height="100%" frameborder="0"></iframe>'
     }
+
+
+@app.get("/api/auth/verify-embed-token")
+async def verify_embed_token(token: str):
+    """
+    Called by the frontend when loaded inside Navigator's iframe.
+    Validates the embed token and returns a session so Microsoft login is bypassed.
+    """
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is required")
+    try:
+        payload = jwt.decode(token, EMBED_SECRET_KEY, algorithms=["HS256"])
+        if payload.get("access") != "embed":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        return {
+            "valid": True,
+            "access": "embed",
+            "app": payload.get("app", ""),
+        }
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Embed token has expired")
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
 
 
 # ─── SERVE FRONTEND ───────────────────────────────────────────────────────────
