@@ -14,40 +14,41 @@ export default function Login() {
   useEffect(() => {
     console.log("=== Login Component Mounted ===");
 
-    // ✅ EMBED MODE — token in URL = inside Navigator iframe
+    // ✅ EMBED MODE — token in URL = inside Navigator's iframe
     const embedToken = searchParams.get("token");
     if (embedToken) {
-      console.log("🔗 Embed token detected — exchanging with backend...");
+      console.log("🔗 Embed token detected — verifying...");
       setLoading(true);
 
-      fetch(`/api/auth/exchange-embed-token?token=${encodeURIComponent(embedToken)}`)
+      // ✅ Uses verify-embed-token endpoint in main.py
+      fetch(`/api/auth/verify-embed-token?token=${encodeURIComponent(embedToken)}`)
         .then((r) => r.json())
         .then((data) => {
-          if (data.session_id) {
-            console.log("✅ Embed session granted:", data.user, "| Trade:", data.trade);
+          if (data.valid) {
+            console.log("✅ Embed token valid — creating session");
             const userData = {
-              name:    data.user,
-              email:   data.email,
-              session: data.session_id,
-              trade:   data.trade,
+              name:    "Navigator User",
+              email:   "navigator@aspect.co.uk",
+              session: "embed-" + embedToken.slice(-16),
+              trade:   "ALL",
             };
-            sessionStorage.setItem("user_session", data.session_id);
+            sessionStorage.setItem("user_session", userData.session);
             sessionStorage.setItem("user_data", JSON.stringify(userData));
             window.history.replaceState({}, document.title, "/");
             navigate("/", { replace: true });
           } else {
-            console.error("❌ Embed exchange failed:", data);
+            console.error("❌ Embed token invalid:", data);
             setError("Session expired. Please reload Navigator to reconnect.");
             setLoading(false);
           }
         })
         .catch((err) => {
-          console.error("❌ Embed token exchange error:", err);
-          setError("Session expired. Please reload Navigator to reconnect.");
+          console.error("❌ Embed token verify error:", err);
+          setError("Could not verify access. Please reload Navigator.");
           setLoading(false);
         });
 
-      return;
+      return; // ⛔ Never fall through to Microsoft OAuth
     }
 
     // ── Normal OAuth flow ─────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ export default function Login() {
   }, [navigate, searchParams]);
 
   const handleMicrosoftLogin = async () => {
-    // ✅ NEVER allow Microsoft OAuth inside an iframe — it is always blocked
+    // ✅ Never allow Microsoft OAuth inside an iframe — always blocked
     if (window.self !== window.top) {
       setError("Session expired. Please reload Navigator to reconnect.");
       return;
