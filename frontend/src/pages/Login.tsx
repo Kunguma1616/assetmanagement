@@ -14,44 +14,7 @@ export default function Login() {
   useEffect(() => {
     console.log("=== Login Component Mounted ===");
 
-    // ✅ EMBED MODE — token in URL = inside Navigator's iframe
-    const embedToken = searchParams.get("token");
-    if (embedToken) {
-      console.log("🔗 Embed token detected — verifying...");
-      setLoading(true);
-
-      // ✅ Uses verify-embed-token endpoint in main.py
-      fetch(`/api/auth/verify-embed-token?token=${encodeURIComponent(embedToken)}`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.valid) {
-            console.log("✅ Embed token valid — creating session");
-            const userData = {
-              name:    "Navigator User",
-              email:   "navigator@aspect.co.uk",
-              session: "embed-" + embedToken.slice(-16),
-              trade:   "ALL",
-            };
-            sessionStorage.setItem("user_session", userData.session);
-            sessionStorage.setItem("user_data", JSON.stringify(userData));
-            window.history.replaceState({}, document.title, "/");
-            navigate("/", { replace: true });
-          } else {
-            console.error("❌ Embed token invalid:", data);
-            setError("Session expired. Please reload Navigator to reconnect.");
-            setLoading(false);
-          }
-        })
-        .catch((err) => {
-          console.error("❌ Embed token verify error:", err);
-          setError("Could not verify access. Please reload Navigator.");
-          setLoading(false);
-        });
-
-      return; // ⛔ Never fall through to Microsoft OAuth
-    }
-
-    // ── Normal OAuth flow ─────────────────────────────────────────────────────
+    // ── OAuth callback from Microsoft ────────────────────────────────────────
     const errorParam = searchParams.get("error");
     const user       = searchParams.get("user");
     const userEmail  = searchParams.get("email");
@@ -87,6 +50,7 @@ export default function Login() {
       return;
     }
 
+    // ── Already logged in ─────────────────────────────────────────────────────
     const existingSession = sessionStorage.getItem("user_session");
     if (existingSession) {
       navigate("/", { replace: true });
@@ -97,7 +61,7 @@ export default function Login() {
   }, [navigate, searchParams]);
 
   const handleMicrosoftLogin = async () => {
-    // ✅ Never allow Microsoft OAuth inside an iframe — always blocked
+    // ✅ Never allow Microsoft OAuth inside an iframe — always blocked by browsers
     if (window.self !== window.top) {
       setError("Session expired. Please reload Navigator to reconnect.");
       return;
@@ -126,7 +90,7 @@ export default function Login() {
               </div>
               <div className="flex items-center justify-center gap-2 mt-4">
                 <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                <span className="text-slate-600 text-sm">Verifying access...</span>
+                <span className="text-slate-600 text-sm">Connecting to Microsoft...</span>
               </div>
             </div>
           </div>
@@ -217,7 +181,6 @@ export default function Login() {
             <h1 className="text-2xl font-bold text-slate-900 mb-2">Fleet & Asset Management System</h1>
             <p className="text-sm text-slate-600">Sign in with your Microsoft account</p>
           </div>
-
           <div className="px-8 py-8">
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
@@ -252,7 +215,6 @@ export default function Login() {
               </p>
             </div>
           </div>
-
           <div className="px-8 py-6 bg-slate-50 border-t border-slate-200">
             <div className="flex items-center justify-center gap-2 text-xs text-slate-600">
               <Shield className="h-4 w-4" />
@@ -260,15 +222,11 @@ export default function Login() {
             </div>
           </div>
         </div>
-
         <div className="mt-6 text-center">
           <p className="text-sm text-slate-600">
             Need help?{" "}
-            <a
-              href="#"
-              onClick={(e) => { e.preventDefault(); alert("Please contact your IT administrator for support."); }}
-              className="text-blue-600 hover:text-blue-700 font-medium hover:underline"
-            >
+            <a href="#" onClick={(e) => { e.preventDefault(); alert("Please contact your IT administrator for support."); }}
+              className="text-blue-600 hover:text-blue-700 font-medium hover:underline">
               Contact Support
             </a>
           </p>
