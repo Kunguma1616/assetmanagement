@@ -3,31 +3,12 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List, Union
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import secrets, requests, hmac, hashlib, time, base64
 import jwt as pyjwt
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 
-# =============================================================================
-#  FIRESTORE SETUP
-#  Falls back to in-memory if Firestore isn't available (local dev)
-# =============================================================================
-try:
-    from google.cloud import firestore as _firestore
-    _db = _firestore.Client()
-    _db.collection("aspect_sessions").limit(1).get()   # quick connectivity test
-    _FIRESTORE_OK = True
-    print("✅ [FIRESTORE] Connected — sessions persist across Cloud Run instances")
-except Exception as _fs_err:
-    _db = None
-    _FIRESTORE_OK = False
-    print(f"⚠️  [FIRESTORE] NOT available ({_fs_err})")
-    print("⚠️  [FIRESTORE] Falling back to in-memory — WILL BREAK on multiple instances!")
-
-# =============================================================================
-#  ENV SETUP
-# =============================================================================
 _ROUTES_DIR  = os.path.dirname(os.path.abspath(__file__))
 _BACKEND_DIR = os.path.dirname(_ROUTES_DIR)
 _ROOT_DIR    = os.path.dirname(_BACKEND_DIR)
@@ -35,11 +16,13 @@ _ROOT_DIR    = os.path.dirname(_BACKEND_DIR)
 load_dotenv(os.path.join(_BACKEND_DIR, ".env"), override=True)
 load_dotenv(os.path.join(_ROOT_DIR,    ".env"), override=True)
 
+
 def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
-router    = APIRouter(prefix="/api/auth", tags=["authentication"])
-_sessions: Dict[str, Dict[str, Any]] = {}   # in-memory fallback only
+
+router   = APIRouter(prefix="/api/auth", tags=["authentication"])
+sessions: Dict[str, Dict[str, Any]] = {}
 
 MICROSOFT_CLIENT_ID     = _env("MICROSOFT_CLIENT_ID")
 MICROSOFT_CLIENT_SECRET = _env("MICROSOFT_CLIENT_SECRET")
@@ -49,18 +32,17 @@ BACKEND_URL             = _env("BACKEND_URL",  "http://localhost:8080")
 EMBED_SECRET            = _env("EMBED_JWT_SECRET")
 MICROSOFT_REDIRECT_URI  = _env("MICROSOFT_REDIRECT_URI") or f"{BACKEND_URL}/api/auth/callback/microsoft"
 
-# Startup config — visible in Cloud Run logs on every cold start
 print("=" * 60)
 print("[auth] STARTUP CONFIG CHECK")
 print("=" * 60)
-print(f"[auth] MICROSOFT_CLIENT_ID     : {'✅ loaded' if MICROSOFT_CLIENT_ID     else '❌ MISSING — OAuth will fail'}")
-print(f"[auth] MICROSOFT_CLIENT_SECRET : {'✅ loaded' if MICROSOFT_CLIENT_SECRET else '❌ MISSING — OAuth will fail'}")
+print(f"[auth] MICROSOFT_CLIENT_ID     : {'✅ loaded' if MICROSOFT_CLIENT_ID     else '❌ MISSING'}")
+print(f"[auth] MICROSOFT_CLIENT_SECRET : {'✅ loaded' if MICROSOFT_CLIENT_SECRET else '❌ MISSING'}")
 print(f"[auth] MICROSOFT_TENANT_ID     : {MICROSOFT_TENANT_ID}")
-print(f"[auth] EMBED_JWT_SECRET        : {'✅ loaded' if EMBED_SECRET            else '❌ MISSING — embed login will fail'}")
+print(f"[auth] EMBED_JWT_SECRET        : {'✅ loaded' if EMBED_SECRET            else '❌ MISSING'}")
 print(f"[auth] FRONTEND_URL            : {FRONTEND_URL}")
 print(f"[auth] MICROSOFT_REDIRECT_URI  : {MICROSOFT_REDIRECT_URI}")
-print(f"[auth] FIRESTORE               : {'✅ connected' if _FIRESTORE_OK else '❌ in-memory fallback'}")
-print(f"[auth] CLOUD_RUN_INSTANCE      : {os.getenv('K_REVISION', 'local/unknown')}")
+print(f"[auth] CLOUD_RUN_INSTANCE      : {os.getenv('K_REVISION', 'local')}")
+print(f"[auth] SESSION STORE           : in-memory (single instance mode)")
 print("=" * 60)
 
 # =============================================================================
@@ -115,97 +97,11 @@ EMBED_TOKEN_TTL_SECONDS = 120
 
 
 # =============================================================================
-#  SESSION STORE  (Firestore first, in-memory fallback)
-# =============================================================================
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def create_session(user_data: Dict[str, Any]) -> str:
-    session_id = secrets.token_urlsafe(32)
-    expires_at = _now() + timedelta(hours=24)
-
-    if _FIRESTORE_OK:
-        try:
-            _db.collection("aspect_sessions").document(session_id).set({
-                "user":       user_data,
-                "created_at": _now(),
-                "expires_at": expires_at,
-                "instance":   os.getenv("K_REVISION", "local"),
-            })
-            print(f"✅ [SESSION] Created in Firestore for '{user_data.get('name')}' | id={session_id[:12]}...")
-        except Exception as e:
-            print(f"❌ [SESSION] Firestore write FAILED: {e} — using in-memory fallback")
-            _sessions[session_id] = {"user": user_data, "expires_at": expires_at}
-    else:
-        _sessions[session_id] = {"user": user_data, "expires_at": expires_at}
-        print(f"✅ [SESSION] Created in-memory for '{user_data.get('name')}' | id={session_id[:12]}...")
-        print(f"⚠️  [SESSION] In-memory count={len(_sessions)} — lost on instance restart!")
-
-    return session_id
-
-
-def get_session_user(session_id: str) -> Optional[Dict[str, Any]]:
-    print(f"🔍 [SESSION] Looking up id={session_id[:12]}...")
-
-    if _FIRESTORE_OK:
-        try:
-            doc = _db.collection("aspect_sessions").document(session_id).get()
-            if not doc.exists:
-                print(f"❌ [SESSION] Not found in Firestore | id={session_id[:12]}...")
-                return None
-            data       = doc.to_dict()
-            expires_at = data.get("expires_at")
-            if expires_at and _now() > expires_at:
-                print(f"⏰ [SESSION] Expired — deleting | id={session_id[:12]}...")
-                _db.collection("aspect_sessions").document(session_id).delete()
-                return None
-            user = data.get("user")
-            print(f"✅ [SESSION] Found: '{user.get('name')}' | trade={user.get('trade')}")
-            return user
-        except Exception as e:
-            print(f"❌ [SESSION] Firestore read error: {e}")
-            return None
-    else:
-        session = _sessions.get(session_id)
-        if not session:
-            print(f"❌ [SESSION] Not found in-memory | id={session_id[:12]}...")
-            print(f"⚠️  [SESSION] Total in-memory sessions on THIS instance: {len(_sessions)}")
-            print(f"⚠️  [SESSION] If this number is 0 right after login, you have a multi-instance problem!")
-            print(f"⚠️  [SESSION] FIX: Enable Firestore — see auth.py setup instructions")
-            return None
-        if _now() > session["expires_at"]:
-            print(f"⏰ [SESSION] Expired in-memory | id={session_id[:12]}...")
-            del _sessions[session_id]
-            return None
-        user = session["user"]
-        print(f"✅ [SESSION] Found in-memory: '{user.get('name')}' | trade={user.get('trade')}")
-        return user
-
-
-def clear_session(session_id: str) -> bool:
-    if _FIRESTORE_OK:
-        try:
-            _db.collection("aspect_sessions").document(session_id).delete()
-            print(f"✅ [SESSION] Deleted from Firestore | id={session_id[:12]}...")
-            return True
-        except Exception as e:
-            print(f"❌ [SESSION] Firestore delete error: {e}")
-            return False
-    elif session_id in _sessions:
-        del _sessions[session_id]
-        print(f"✅ [SESSION] Deleted from in-memory | id={session_id[:12]}...")
-        return True
-    return False
-
-
-# =============================================================================
 #  HELPERS
 # =============================================================================
 
 def normalise_trade(trade: Union[None, str, list]) -> str:
-    if trade is None:   return "ALL"
+    if trade is None:           return "ALL"
     if isinstance(trade, list): return ",".join(trade)
     return trade
 
@@ -259,7 +155,7 @@ def decode_id_token_roles(id_token: str) -> List[str]:
         roles   = payload.get("roles", [])
         print(f"✅ [TOKEN] Roles in id_token: {roles}")
         if not roles:
-            print(f"⚠️  [TOKEN] No 'roles' claim found! Check Azure: App Registration → App roles → assign to user")
+            print(f"⚠️  [TOKEN] No 'roles' claim — check Azure App roles are assigned to user")
         return roles
     except Exception as e:
         print(f"❌ [TOKEN] Failed to decode id_token: {e}")
@@ -286,7 +182,7 @@ def _get_app_only_token() -> str:
             print(f"❌ [GRAPH] App-only token FAILED: {resp.json()}")
         return token
     except Exception as e:
-        print(f"❌ [GRAPH] App-only token exception: {e}")
+        print(f"❌ [GRAPH] Exception: {e}")
         return ""
 
 
@@ -294,7 +190,6 @@ def _get_user_roles_from_graph(email: str) -> List[str]:
     print(f"🔍 [GRAPH] Looking up roles for {email}...")
     app_token = _get_app_only_token()
     if not app_token:
-        print(f"❌ [GRAPH] No app token — cannot look up roles")
         return []
     try:
         user_resp = requests.get(
@@ -315,7 +210,7 @@ def _get_user_roles_from_graph(email: str) -> List[str]:
             headers={"Authorization": f"Bearer {app_token}"},
             timeout=10,
         ).json().get("value", [])
-        print(f"🔍 [GRAPH] Role assignments found: {len(assignments)}")
+        print(f"🔍 [GRAPH] Role assignments: {len(assignments)}")
 
         sp_data = requests.get(
             f"https://graph.microsoft.com/v1.0/servicePrincipals"
@@ -328,7 +223,7 @@ def _get_user_roles_from_graph(email: str) -> List[str]:
         if sp_data:
             for app_role in sp_data[0].get("appRoles", []):
                 role_id_to_value[app_role["id"]] = app_role["value"]
-        print(f"🔍 [GRAPH] App roles on service principal: {list(role_id_to_value.values())}")
+        print(f"🔍 [GRAPH] Known app roles: {list(role_id_to_value.values())}")
 
         resolved = [
             role_id_to_value[a["appRoleId"]]
@@ -338,12 +233,12 @@ def _get_user_roles_from_graph(email: str) -> List[str]:
         print(f"✅ [GRAPH] Resolved roles for {email}: {resolved}")
         return resolved
     except Exception as e:
-        print(f"❌ [GRAPH] Role lookup exception: {e}")
+        print(f"❌ [GRAPH] Exception: {e}")
         return []
 
 
 def _verify_embed_token(token: str, email: str) -> bool:
-    print(f"🔍 [EMBED] Verifying HMAC token for {email}...")
+    print(f"🔍 [EMBED] Verifying token for {email}...")
     if not EMBED_SECRET:
         print(f"❌ [EMBED] EMBED_JWT_SECRET not set!")
         raise HTTPException(status_code=500, detail="EMBED_JWT_SECRET not configured.")
@@ -356,7 +251,7 @@ def _verify_embed_token(token: str, email: str) -> bool:
             return False
         token_age = int(time.time()) - int(ts_str)
         if token_age > EMBED_TOKEN_TTL_SECONDS or token_age < -10:
-            print(f"❌ [EMBED] Token age={token_age}s outside window (0–{EMBED_TOKEN_TTL_SECONDS}s)")
+            print(f"❌ [EMBED] Token age={token_age}s outside window")
             return False
         expected_sig = hmac.new(EMBED_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
         valid = hmac.compare_digest(expected_sig, sig)
@@ -368,14 +263,53 @@ def _verify_embed_token(token: str, email: str) -> bool:
 
 
 # =============================================================================
+#  SESSION HELPERS  (in-memory — works perfectly with max-instances=1)
+# =============================================================================
+
+def create_session(user_data: Dict[str, Any]) -> str:
+    session_id = secrets.token_urlsafe(32)
+    sessions[session_id] = {
+        "user":       user_data,
+        "created_at": datetime.now(),
+        "expires_at": datetime.now() + timedelta(hours=24),
+    }
+    print(f"✅ [SESSION] Created for '{user_data.get('name')}' | id={session_id[:12]}... | total={len(sessions)}")
+    return session_id
+
+
+def get_session_user(session_id: str) -> Optional[Dict[str, Any]]:
+    print(f"🔍 [SESSION] Looking up id={session_id[:12]}... | total in memory={len(sessions)}")
+    session = sessions.get(session_id)
+    if not session:
+        print(f"❌ [SESSION] Not found | id={session_id[:12]}...")
+        return None
+    if datetime.now() > session["expires_at"]:
+        print(f"⏰ [SESSION] Expired | id={session_id[:12]}...")
+        del sessions[session_id]
+        return None
+    user = session["user"]
+    print(f"✅ [SESSION] Found: '{user.get('name')}' | trade={user.get('trade')}")
+    return user
+
+
+def clear_session(session_id: str) -> bool:
+    if session_id in sessions:
+        del sessions[session_id]
+        print(f"✅ [SESSION] Cleared | id={session_id[:12]}...")
+        return True
+    print(f"⚠️  [SESSION] Clear — not found | id={session_id[:12]}...")
+    return False
+
+
+# =============================================================================
 #  ROUTES
 # =============================================================================
 
 @router.get("/microsoft")
 async def microsoft_signin():
-    print(f"🔐 [OAUTH] Starting Microsoft sign-in | redirect_uri={MICROSOFT_REDIRECT_URI}")
+    print(f"🔐 [OAUTH] Starting sign-in | redirect_uri={MICROSOFT_REDIRECT_URI}")
     if not MICROSOFT_CLIENT_ID or not MICROSOFT_CLIENT_SECRET:
-        print(f"❌ [OAUTH] Missing credentials — cannot start OAuth")
+        print(f"❌ [OAUTH] Missing credentials!")
         raise HTTPException(status_code=500, detail="Microsoft OAuth not configured.")
     params = {
         "client_id":     MICROSOFT_CLIENT_ID,
@@ -401,15 +335,15 @@ async def microsoft_callback(
     print("=" * 60)
 
     if error:
-        print(f"❌ [OAUTH] Error from Microsoft: {error} — {error_description}")
+        print(f"❌ [OAUTH] Error: {error} — {error_description}")
         return RedirectResponse(url=f"{FRONTEND_URL}/?error=oauth_error&message={error}")
     if not code:
-        print(f"❌ [OAUTH] No code in callback params")
+        print(f"❌ [OAUTH] No code in callback")
         return RedirectResponse(url=f"{FRONTEND_URL}/?error=no_code")
 
     print(f"✅ [OAUTH] Auth code received — exchanging for tokens...")
     try:
-        token_resp = requests.post(
+        token_data = requests.post(
             f"https://login.microsoftonline.com/{MICROSOFT_TENANT_ID}/oauth2/v2.0/token",
             data={
                 "client_id":     MICROSOFT_CLIENT_ID,
@@ -420,8 +354,7 @@ async def microsoft_callback(
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=15,
-        )
-        token_data = token_resp.json()
+        ).json()
 
         if "error" in token_data:
             print(f"❌ [OAUTH] Token exchange failed: {token_data.get('error')} — {token_data.get('error_description')}")
@@ -440,7 +373,7 @@ async def microsoft_callback(
             timeout=10,
         )
         if graph.status_code != 200:
-            print(f"❌ [OAUTH] Graph /me failed: status={graph.status_code}")
+            print(f"❌ [OAUTH] Graph /me failed: {graph.status_code}")
             return RedirectResponse(url=f"{FRONTEND_URL}/?error=user_info_failed")
 
         graph_data = graph.json()
@@ -459,7 +392,12 @@ async def microsoft_callback(
         user_trade = normalise_trade(trade_raw)
         print(f"✅ [OAUTH] GRANTED: {user_name} | trade={user_trade}")
 
-        session_id = create_session({"name": user_name, "email": user_email, "id": user_id, "trade": user_trade})
+        session_id = create_session({
+            "name":  user_name,
+            "email": user_email,
+            "id":    user_id,
+            "trade": user_trade,
+        })
 
         print("=" * 60 + "\n")
         return RedirectResponse(
@@ -467,7 +405,7 @@ async def microsoft_callback(
         )
 
     except requests.exceptions.Timeout:
-        print(f"❌ [OAUTH] Timeout calling Microsoft/Graph")
+        print(f"❌ [OAUTH] Timeout")
         return RedirectResponse(url=f"{FRONTEND_URL}/?error=network_error")
     except requests.exceptions.RequestException as e:
         print(f"❌ [OAUTH] Network error: {e}")
@@ -604,19 +542,21 @@ async def verify_session(session_id: str) -> Dict[str, Any]:
     if not user:
         print(f"❌ [VERIFY] Invalid — 401")
         raise HTTPException(status_code=401, detail="Invalid or expired session")
+    session    = sessions.get(session_id)
+    expires_at = session.get("expires_at") if session else None
     print(f"✅ [VERIFY] Valid for '{user.get('name')}'")
-    return {"valid": True, "user": user}
+    return {"valid": True, "user": user, "expires_at": expires_at.isoformat() if expires_at else None}
 
 
 @router.get("/health")
 async def health_check():
     return {
         "status":                     "ok",
-        "firestore":                  "✅ connected" if _FIRESTORE_OK else "❌ in-memory fallback — sessions will break on multi-instance",
+        "session_store":              "in-memory",
         "cloud_run_instance":         os.getenv("K_REVISION", "local"),
+        "active_sessions":            len(sessions),
         "microsoft_oauth_configured": bool(MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET),
         "embed_login_configured":     bool(EMBED_SECRET),
         "tenant_id":                  MICROSOFT_TENANT_ID,
         "known_roles":                list(ROLE_TRADE_MAP.keys()),
-        "active_sessions":            len(_sessions) if not _FIRESTORE_OK else "stored in firestore",
     }
