@@ -24,31 +24,34 @@ import VehicleCondition from "./pages/vehicleCondition";
 import AssetDashboard from "./pages/AssetDashboad";
 import AssetCostPage from "./pages/AssetCost";
 import AssetAllocation from "./pages/Assetallocation";
-import VehicleCostSimple from "./pages/VehicleCostSimple"; // ✅ Added
-import ServiceMaintenanceCosts from "./pages/ServiceMaintenanceCosts"; // ✅ Service & Maintenance
+import VehicleCostSimple from "./pages/VehicleCostSimple";
+import ServiceMaintenanceCosts from "./pages/ServiceMaintenanceCosts";
 import MainLayout from "./components/layout/MainLayout";
 
 const queryClient = new QueryClient();
 
+// ✅ Are we running inside Navigator's iframe?
+const isInIframe = () => {
+  try { return window.self !== window.top; }
+  catch { return true; }
+};
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [loading, setLoading]                 = useState(true);
+  const [embedFailed, setEmbedFailed]         = useState(false);
 
   useEffect(() => {
     let finished = false;
 
     const saveSession = (session: string, user: string, userEmail: string, trade?: string) => {
       sessionStorage.setItem("user_session", session);
-      sessionStorage.setItem(
-        "user_data",
-        JSON.stringify({
-          name: user,
-          email: userEmail,
-          session,
-          trade: trade || "ALL",
-        })
-      );
+      sessionStorage.setItem("user_data", JSON.stringify({
+        name:    user,
+        email:   userEmail,
+        session,
+        trade:   trade || "ALL",
+      }));
     };
 
     const finish = (authenticated: boolean) => {
@@ -74,12 +77,23 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             finish(true);
           } else {
             console.error("❌ Embed token exchange failed:", data.detail || data.error);
-            finish(false);
+            // ✅ If in iframe, show error instead of redirecting to login
+            if (isInIframe()) {
+              setEmbedFailed(true);
+              finish(false);
+            } else {
+              finish(false);
+            }
           }
         })
         .catch((err) => {
           console.error("❌ Embed token network error:", err);
-          finish(false);
+          if (isInIframe()) {
+            setEmbedFailed(true);
+            finish(false);
+          } else {
+            finish(false);
+          }
         });
     };
 
@@ -90,10 +104,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
         return true;
       }
 
-      const session = params.get("session");
-      const user = params.get("user");
-      const userEmail = params.get("email");
-      const trade = params.get("trade");
+      const session    = params.get("session");
+      const user       = params.get("user");
+      const userEmail  = params.get("email");
+      const trade      = params.get("trade");
 
       if (session && user && userEmail) {
         console.log("✅ OAuth/embed callback detected, saving session...");
@@ -109,9 +123,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const queryParams = new URLSearchParams(window.location.search);
     if (bootstrapFromParams(queryParams)) return;
 
-    const hash = window.location.hash.startsWith("#")
-      ? window.location.hash.slice(1)
-      : window.location.hash;
+    const hash      = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
     const hashParams = new URLSearchParams(hash);
     if (bootstrapFromParams(hashParams)) return;
 
@@ -128,8 +140,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       if (
         data.type === "aspect-embed-session" &&
         typeof data.session === "string" &&
-        typeof data.user === "string" &&
-        typeof data.email === "string"
+        typeof data.user   === "string" &&
+        typeof data.email  === "string"
       ) {
         window.removeEventListener("message", handleEmbedMessage);
         console.log("✅ Session received from parent window");
@@ -140,7 +152,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
     window.addEventListener("message", handleEmbedMessage);
 
-    // ✅ EXISTING SESSION — already logged in
+    // ✅ Existing session — already logged in
     const sessionId = sessionStorage.getItem("user_session");
     if (sessionId) {
       console.log("ProtectedRoute check - sessionId:", true);
@@ -151,11 +163,18 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
     console.log("ProtectedRoute check - sessionId:", false);
 
-    // Give the parent iframe host a moment to send the token via postMessage.
+    // Give parent iframe host time to send token via postMessage
+    // ✅ Longer timeout in iframe (3s) to allow Navigator to send the token
+    const timeoutMs = isInIframe() ? 3000 : 1500;
     const timer = window.setTimeout(() => {
       window.removeEventListener("message", handleEmbedMessage);
+      // ✅ If in iframe and still no session, show error — NOT Microsoft OAuth
+      if (isInIframe()) {
+        console.warn("⚠️ In iframe but no token received — showing reload message");
+        setEmbedFailed(true);
+      }
       finish(false);
-    }, 1500);
+    }, timeoutMs);
 
     return () => {
       finished = true;
@@ -164,18 +183,40 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
+  // ── Loading spinner ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
       </div>
     );
   }
 
+  // ✅ Inside iframe with no valid session — show friendly message, NOT login redirect
+  if (!isAuthenticated && isInIframe()) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
+        <div className="text-4xl">🔒</div>
+        <h2 className="text-xl font-bold text-slate-800">Session Expired</h2>
+        <p className="text-slate-600 text-sm max-w-xs">
+          Your session has expired. Please reload Navigator to reconnect.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+        >
+          Reload
+        </button>
+      </div>
+    );
+  }
+
+  // ── Not authenticated in standalone mode → go to login ────────────────────
   if (!isAuthenticated) {
     console.log("Not authenticated, redirecting to login");
     return <Navigate to="/login" replace />;
   }
+
   return <MainLayout>{children}</MainLayout>;
 };
 
@@ -190,169 +231,26 @@ const App = () => (
           <Route path="/login" element={<Login />} />
 
           {/* Protected Routes */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <FleetDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/fleet-dashboard"
-            element={
-              <ProtectedRoute>
-                <FleetDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/chatbot"
-            element={
-              <ProtectedRoute>
-                <ChatBot />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/chat"
-            element={
-              <ProtectedRoute>
-                <ChatBot />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/copilot"
-            element={
-              <ProtectedRoute>
-                <ChatBot />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/webfleet"
-            element={
-              <ProtectedRoute>
-                <Webfleet />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/upload"
-            element={
-              <ProtectedRoute>
-                <Upload />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/vehicle-lookup"
-            element={
-              <ProtectedRoute>
-                <VehicleLookup />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/upload-asset"
-            element={
-              <ProtectedRoute>
-                <RegisterAsset />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/assets"
-            element={
-              <ProtectedRoute>
-                <AssetsGallery />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/assets/:id"
-            element={
-              <ProtectedRoute>
-                <AssetDetail />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/index"
-            element={
-              <ProtectedRoute>
-                <Index />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/vehicle-cost-analysis"
-            element={
-              <ProtectedRoute>
-                <HSBCLeases />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/service-cost"
-            element={
-              <ProtectedRoute>
-                <ServiceCostLookup />
-              </ProtectedRoute>
-            }
-          />
-          {/* ✅ UPDATED: /vehicle-cost now shows Service & Maintenance Costs */}
-          <Route
-            path="/vehicle-cost"
-            element={
-              <ProtectedRoute>
-                <ServiceMaintenanceCosts />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/By Cost"
-            element={
-              <ProtectedRoute>
-                <CostAnalysisPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/vehicle-condition"
-            element={
-              <ProtectedRoute>
-                <VehicleCondition />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* ─── Asset Pages ─── */}
-          <Route
-            path="/asset-dashboard"
-            element={
-              <ProtectedRoute>
-                <AssetDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/asset-cost"
-            element={
-              <ProtectedRoute>
-                <AssetCostPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/asset-allocation"
-            element={
-              <ProtectedRoute>
-                <AssetAllocation />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/" element={<ProtectedRoute><FleetDashboard /></ProtectedRoute>} />
+          <Route path="/fleet-dashboard" element={<ProtectedRoute><FleetDashboard /></ProtectedRoute>} />
+          <Route path="/chatbot" element={<ProtectedRoute><ChatBot /></ProtectedRoute>} />
+          <Route path="/chat" element={<ProtectedRoute><ChatBot /></ProtectedRoute>} />
+          <Route path="/copilot" element={<ProtectedRoute><ChatBot /></ProtectedRoute>} />
+          <Route path="/webfleet" element={<ProtectedRoute><Webfleet /></ProtectedRoute>} />
+          <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
+          <Route path="/vehicle-lookup" element={<ProtectedRoute><VehicleLookup /></ProtectedRoute>} />
+          <Route path="/upload-asset" element={<ProtectedRoute><RegisterAsset /></ProtectedRoute>} />
+          <Route path="/assets" element={<ProtectedRoute><AssetsGallery /></ProtectedRoute>} />
+          <Route path="/assets/:id" element={<ProtectedRoute><AssetDetail /></ProtectedRoute>} />
+          <Route path="/index" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/vehicle-cost-analysis" element={<ProtectedRoute><HSBCLeases /></ProtectedRoute>} />
+          <Route path="/service-cost" element={<ProtectedRoute><ServiceCostLookup /></ProtectedRoute>} />
+          <Route path="/vehicle-cost" element={<ProtectedRoute><ServiceMaintenanceCosts /></ProtectedRoute>} />
+          <Route path="/By Cost" element={<ProtectedRoute><CostAnalysisPage /></ProtectedRoute>} />
+          <Route path="/vehicle-condition" element={<ProtectedRoute><VehicleCondition /></ProtectedRoute>} />
+          <Route path="/asset-dashboard" element={<ProtectedRoute><AssetDashboard /></ProtectedRoute>} />
+          <Route path="/asset-cost" element={<ProtectedRoute><AssetCostPage /></ProtectedRoute>} />
+          <Route path="/asset-allocation" element={<ProtectedRoute><AssetAllocation /></ProtectedRoute>} />
 
           {/* Catch all */}
           <Route path="*" element={<NotFound />} />
