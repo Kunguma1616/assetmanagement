@@ -14,18 +14,16 @@ export default function Login() {
   useEffect(() => {
     console.log("=== Login Component Mounted ===");
 
-    // ✅ EMBED MODE — token in URL means we're inside Navigator's iframe
+    // ✅ EMBED MODE — token in URL = inside Navigator iframe
     const embedToken = searchParams.get("token");
     if (embedToken) {
       console.log("🔗 Embed token detected — exchanging with backend...");
       setLoading(true);
 
-      // ✅ Correct endpoint: exchange-embed-token (not verify-embed-token)
       fetch(`/api/auth/exchange-embed-token?token=${encodeURIComponent(embedToken)}`)
         .then((r) => r.json())
         .then((data) => {
           if (data.session_id) {
-            // ✅ Use REAL data from backend — not hardcoded fake values
             console.log("✅ Embed session granted:", data.user, "| Trade:", data.trade);
             const userData = {
               name:    data.user,
@@ -39,21 +37,20 @@ export default function Login() {
             navigate("/", { replace: true });
           } else {
             console.error("❌ Embed exchange failed:", data);
-            setError("Could not verify access. Please reload Navigator.");
+            setError("Session expired. Please reload Navigator to reconnect.");
             setLoading(false);
           }
         })
         .catch((err) => {
           console.error("❌ Embed token exchange error:", err);
-          setError("Could not verify embed token. Please try reloading.");
+          setError("Session expired. Please reload Navigator to reconnect.");
           setLoading(false);
         });
 
-      return; // ⛔ Stop — never fall through to Microsoft OAuth
+      return;
     }
 
-    // ── Normal (non-embed) OAuth flow ────────────────────────────────────────
-
+    // ── Normal OAuth flow ─────────────────────────────────────────────────────
     const errorParam = searchParams.get("error");
     const user       = searchParams.get("user");
     const userEmail  = searchParams.get("email");
@@ -99,7 +96,11 @@ export default function Login() {
   }, [navigate, searchParams]);
 
   const handleMicrosoftLogin = async () => {
-    // ✅ No iframe block — just redirect to Microsoft
+    // ✅ NEVER allow Microsoft OAuth inside an iframe — it is always blocked
+    if (window.self !== window.top) {
+      setError("Session expired. Please reload Navigator to reconnect.");
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
