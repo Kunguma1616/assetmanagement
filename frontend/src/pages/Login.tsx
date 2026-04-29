@@ -15,51 +15,50 @@ export default function Login() {
     console.log("=== Login Component Mounted ===");
 
     // ✅ EMBED MODE — token in URL means we're inside Navigator's iframe
-    // Skip Microsoft auth entirely, verify the embed token server-side instead
     const embedToken = searchParams.get("token");
     if (embedToken) {
-      console.log("🔗 Embed token detected — verifying with backend...");
+      console.log("🔗 Embed token detected — exchanging with backend...");
       setLoading(true);
 
-      fetch(`/api/auth/verify-embed-token?token=${encodeURIComponent(embedToken)}`)
+      // ✅ Correct endpoint: exchange-embed-token (not verify-embed-token)
+      fetch(`/api/auth/exchange-embed-token?token=${encodeURIComponent(embedToken)}`)
         .then((r) => r.json())
         .then((data) => {
-          if (data.valid) {
-            console.log("✅ Embed token valid — creating local session");
-            const sessionId = "embed-" + embedToken.slice(-12);
+          if (data.session_id) {
+            // ✅ Use REAL data from backend — not hardcoded fake values
+            console.log("✅ Embed session granted:", data.user, "| Trade:", data.trade);
             const userData = {
-              name: "Navigator User",
-              email: "embed@navigator",
-              session: sessionId,
-              trade: "ALL",
+              name:    data.user,
+              email:   data.email,
+              session: data.session_id,
+              trade:   data.trade,
             };
-            sessionStorage.setItem("user_session", sessionId);
+            sessionStorage.setItem("user_session", data.session_id);
             sessionStorage.setItem("user_data", JSON.stringify(userData));
-            // Remove token from URL so it doesn't stay visible, then go to dashboard
             window.history.replaceState({}, document.title, "/");
             navigate("/", { replace: true });
           } else {
-            console.error("❌ Embed token invalid:", data);
-            setError("Invalid embed token. Please reload Navigator.");
+            console.error("❌ Embed exchange failed:", data);
+            setError("Could not verify access. Please reload Navigator.");
             setLoading(false);
           }
         })
         .catch((err) => {
-          console.error("❌ Embed token verification failed:", err);
+          console.error("❌ Embed token exchange error:", err);
           setError("Could not verify embed token. Please try reloading.");
           setLoading(false);
         });
 
-      return; // ⛔ Stop here — never fall through to Microsoft OAuth
+      return; // ⛔ Stop — never fall through to Microsoft OAuth
     }
 
-    // ── Normal (non-embed) flow below ────────────────────────────────────────
+    // ── Normal (non-embed) OAuth flow ────────────────────────────────────────
 
     const errorParam = searchParams.get("error");
-    const user = searchParams.get("user");
-    const userEmail = searchParams.get("email");
-    const session = searchParams.get("session");
-    const trade = searchParams.get("trade");
+    const user       = searchParams.get("user");
+    const userEmail  = searchParams.get("email");
+    const session    = searchParams.get("session");
+    const trade      = searchParams.get("trade");
 
     if (errorParam) {
       console.error("❌ OAuth error:", errorParam);
@@ -75,10 +74,10 @@ export default function Login() {
     if (user && userEmail && session) {
       console.log("✅ OAuth successful:", user, "| Trade:", trade);
       const userData = {
-        name: user,
-        email: userEmail,
+        name:    user,
+        email:   userEmail,
         session,
-        trade: trade || "ALL",
+        trade:   trade || "ALL",
       };
       sessionStorage.setItem("user_session", session);
       sessionStorage.setItem("user_data", JSON.stringify(userData));
@@ -100,11 +99,7 @@ export default function Login() {
   }, [navigate, searchParams]);
 
   const handleMicrosoftLogin = async () => {
-    // ✅ Block Microsoft OAuth if we're inside an iframe
-    if (window.self !== window.top) {
-      setError("Please log in via the Navigator application.");
-      return;
-    }
+    // ✅ No iframe block — just redirect to Microsoft
     try {
       setLoading(true);
       setError(null);
@@ -117,7 +112,7 @@ export default function Login() {
     }
   };
 
-  // ── Loading screen (shown while verifying embed token) ───────────────────
+  // ── Loading screen ────────────────────────────────────────────────────────
   if (loading && !error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50 flex flex-col items-center justify-center p-4">
@@ -269,10 +264,7 @@ export default function Login() {
             Need help?{" "}
             <a
               href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                alert("Please contact your IT administrator for support.");
-              }}
+              onClick={(e) => { e.preventDefault(); alert("Please contact your IT administrator for support."); }}
               className="text-blue-600 hover:text-blue-700 font-medium hover:underline"
             >
               Contact Support
