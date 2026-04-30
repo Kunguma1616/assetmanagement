@@ -1,4 +1,4 @@
-  import { useState } from "react";
+import { useState } from "react";
   import { useNavigate, useLocation } from "react-router-dom";
   import {
     LayoutDashboard,
@@ -292,6 +292,12 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed,  setCollapsed]  = useState(false);
+
+  // ── Embed detection: hidden inside an iframe OR ?embed=1 in the URL ──────────
+  const isEmbedded =
+    window.parent !== window ||
+    new URLSearchParams(window.location.search).get("embed") === "1";
+
   const userData = (() => {
     try {
       return JSON.parse(sessionStorage.getItem("user_data") || "{}");
@@ -482,16 +488,20 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 </div>
               </div>
             )}
-            <button
-              onClick={handleSignOut}
-              className="w-full flex flex-row gap-3 items-center rounded-lg px-3 py-2 border border-transparent transition text-left text-sm"
-              style={{ color: C.blueDark, justifyContent: collapsed ? "center" : undefined }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#EEF2F8")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-            >
-              <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
-              {!collapsed && <span style={{ fontFamily: 'MontBold, sans-serif' }}>Log out</span>}
-            </button>
+
+            {/* ── Logout hidden in embed mode — session is managed by the host ── */}
+            {!isEmbedded && (
+              <button
+                onClick={handleSignOut}
+                className="w-full flex flex-row gap-3 items-center rounded-lg px-3 py-2 border border-transparent transition text-left text-sm"
+                style={{ color: C.blueDark, justifyContent: collapsed ? "center" : undefined }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#EEF2F8")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
+                {!collapsed && <span style={{ fontFamily: 'MontBold, sans-serif' }}>Log out</span>}
+              </button>
+            )}
           </div>
 
         </aside>
