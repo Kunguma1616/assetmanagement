@@ -155,7 +155,6 @@ function getDrainagePlumbingSubGroup(rawTrade: string): 'Drainage' | 'Plumbing' 
   return null;
 }
 
-/* ── getLDRSubGroup: classifies a record into Leak Detection or Damp & Mould ── */
 function getLDRSubGroup(rawTrade: string): 'Leak Detection' | 'Damp & Mould' | null {
   const check = (rawTrade || '').toLowerCase().trim();
   if (check.includes('leak detection')) return 'Leak Detection';
@@ -205,7 +204,7 @@ type ElecLoc    = 'N' | 'S' | null;
 type DPLoc      = 'E' | 'NW' | 'SW' | null;
 type LDRLoc     = 'E' | 'NW' | 'SW' | null;
 type RoofLoc    = 'N' | 'S' | null;
-type LDRSubType = 'Leak Detection' | 'Damp & Mould' | null;   // ← NEW
+type LDRSubType = 'Leak Detection' | 'Damp & Mould' | null;
 
 /* ── resolveLocationFilters ── */
 function resolveLocationFilters(rawTradeString: string): {
@@ -217,7 +216,6 @@ function resolveLocationFilters(rawTradeString: string): {
 } {
   const trades = rawTradeString.split(',').map(t => t.trim());
 
-  // Electrical N / S
   const elecTrades = trades.filter(t => t.toLowerCase().includes('electrical'));
   let electricalLoc: ElecLoc = null;
   if (elecTrades.length === 1) {
@@ -225,7 +223,6 @@ function resolveLocationFilters(rawTradeString: string): {
     else if (elecTrades[0].endsWith(' S')) electricalLoc = 'S';
   }
 
-  // Drainage / Plumbing E / NW / SW
   const dpTrades = trades.filter(t =>
     t.toLowerCase().includes('drainage') || t.toLowerCase().includes('plumbing')
   );
@@ -237,7 +234,6 @@ function resolveLocationFilters(rawTradeString: string): {
   });
   const dpLoc: DPLoc = dpLocSet.size === 1 ? ([...dpLocSet][0] as DPLoc) : null;
 
-  // Leak Detection E / NW / SW
   const ldrTrades = trades.filter(t => t.toLowerCase().includes('leak detection'));
   const ldrLocSet = new Set<string>();
   ldrTrades.forEach(t => {
@@ -247,7 +243,6 @@ function resolveLocationFilters(rawTradeString: string): {
   });
   const ldrLoc: LDRLoc = ldrLocSet.size === 1 ? ([...ldrLocSet][0] as LDRLoc) : null;
 
-  // Roofing N / S
   const roofTrades = trades.filter(t => t.toLowerCase().startsWith('roofing'));
   let roofLoc: RoofLoc = null;
   if (roofTrades.length === 1) {
@@ -255,7 +250,6 @@ function resolveLocationFilters(rawTradeString: string): {
     else if (roofTrades[0].endsWith(' S')) roofLoc = 'S';
   }
 
-  // LDR sub-type — auto-detect from login trade
   const hasLeakDetection = trades.some(t => t.toLowerCase().includes('leak detection'));
   const hasDampMould     = trades.some(t =>
     t.toLowerCase().includes('damp') || t.toLowerCase().includes('mould') ||
@@ -264,7 +258,6 @@ function resolveLocationFilters(rawTradeString: string): {
   let ldrSubType: LDRSubType = null;
   if (hasLeakDetection && !hasDampMould) ldrSubType = 'Leak Detection';
   if (hasDampMould && !hasLeakDetection) ldrSubType = 'Damp & Mould';
-  // If both (e.g. Marjan — TGM sees all) → null = show all
 
   return { electricalLoc, dpLoc, ldrLoc, roofLoc, ldrSubType };
 }
@@ -513,7 +506,7 @@ const VehicleConditionDashboard: React.FC = () => {
   const [dpLocFilter,         setDpLocFilter]         = useState<DPLoc>(null);
   const [ldrLocFilter,        setLdrLocFilter]        = useState<LDRLoc>(null);
   const [roofLocFilter,       setRoofLocFilter]       = useState<RoofLoc>(null);
-  const [ldrSubFilter,        setLdrSubFilter]        = useState<LDRSubType>(null);  // ← NEW
+  const [ldrSubFilter,        setLdrSubFilter]        = useState<LDRSubType>(null);
   const [vcrPopup,            setVcrPopup]            = useState<{ result: SearchResult | null; loading: boolean; open: boolean }>({ result: null, loading: false, open: false });
   const [aiAnalysis,          setAiAnalysis]          = useState<AIAnalysisResult | null>(null);
   const [aiLoading,           setAiLoading]           = useState(false);
@@ -536,37 +529,31 @@ const VehicleConditionDashboard: React.FC = () => {
       const userData = JSON.parse(sessionStorage.getItem('user_data') || '{}');
       const rawTrade = (userData.trade || '').trim();
       if (rawTrade && rawTrade !== 'ALL') {
-        // Parse allowed trades into a Set for fast lookup
         const trades = rawTrade.split(',').map(t => t.trim());
         setAllowedTrades(new Set(trades));
-        
+
         const hasElectrical = trades.some(t => t.toLowerCase().includes('electrical'));
-        
+
         const resolvedGroup = resolveTradeGroup(rawTrade);
         setTradeGroupFilter(resolvedGroup);
-        
-        // Force clear Electrical filters if user doesn't have Electrical access
+
         if (!hasElectrical) {
           setGheSubFilter(null);
           setElectricalLocFilter(null);
         } else {
-          const { gheSubFilter: gheSub, dpSubFilter: dpSub } = resolveSubFilters(rawTrade);
-          if (gheSub && gheSub !== 'Electrical') {
-            setGheSubFilter(gheSub);
-          } else if (gheSub === 'Electrical') {
-            setGheSubFilter(gheSub);
-          }
+          const { gheSubFilter: gheSub } = resolveSubFilters(rawTrade);
+          if (gheSub) setGheSubFilter(gheSub);
           const { electricalLoc } = resolveLocationFilters(rawTrade);
           if (electricalLoc) setElectricalLocFilter(electricalLoc);
         }
-        
+
         const { dpSubFilter: dpSub } = resolveSubFilters(rawTrade);
         if (dpSub) setDpSubFilter(dpSub);
-        
+
         const { dpLoc, ldrLoc, roofLoc, ldrSubType } = resolveLocationFilters(rawTrade);
-        if (dpLoc) setDpLocFilter(dpLoc);
-        if (ldrLoc) setLdrLocFilter(ldrLoc);
-        if (roofLoc) setRoofLocFilter(roofLoc);
+        if (dpLoc)      setDpLocFilter(dpLoc);
+        if (ldrLoc)     setLdrLocFilter(ldrLoc);
+        if (roofLoc)    setRoofLocFilter(roofLoc);
         if (ldrSubType) setLdrSubFilter(ldrSubType);
       }
       loadDashboard();
@@ -651,19 +638,21 @@ const VehicleConditionDashboard: React.FC = () => {
 
   const actualTradeFilter = !showsAllTrades() ? resolveTradeGroup(userTrade || '') : tradeGroupFilter;
 
-  /* ── Helper to check if a record's trade is in user's allowed trades ── */
+  /* ── ✅ FIXED: isTradeAllowed — regex now handles NW, SW, SE, NE, N, S, E ── */
   const isTradeAllowed = (recordRawTrade: string | undefined): boolean => {
     if (showsAllTrades() || allowedTrades.size === 0) return true;
     if (!recordRawTrade) return false;
-    
+
     const recordTrade = recordRawTrade.trim();
-    
-    // Check if any of the user's allowed trades match (case-insensitive).
-    // For location-suffixed trades like "Electrical N" / "Electrical S", also match
-    // against the base trade name (e.g. "Electrical") so records reach the location filter.
+
     return Array.from(allowedTrades).some(userTrade => {
+      // Direct match: record trade is contained in or matches the user's allowed trade
       if (recordTrade.toLowerCase().includes(userTrade.toLowerCase())) return true;
-      const baseTrade = userTrade.replace(/ [NS]$| [EW]{1,2}$/, '').trim();
+
+      // ✅ FIXED: strip location suffix (N, S, E, NW, SW, SE, NE) to get base trade
+      // This lets "Drainage SW" match against a record with rawTrade "Drainage"
+      const baseTrade = userTrade.replace(/ (N|S|E|NW|SW|SE|NE)$/i, '').trim();
+
       if (baseTrade !== userTrade && recordTrade.toLowerCase().includes(baseTrade.toLowerCase())) return true;
       return false;
     });
@@ -679,7 +668,6 @@ const VehicleConditionDashboard: React.FC = () => {
 
   /* ── Trade filter predicate ── */
   const matchesTrade = (v: ReturnType<typeof enrichRecord>): boolean => {
-    // First check: is the record's trade in the user's allowed trades?
     if (!isTradeAllowed(v.rawTrade)) return false;
 
     if (isLeeView || actualTradeFilter === 'Building Fabric & Environmental') {
@@ -721,26 +709,19 @@ const VehicleConditionDashboard: React.FC = () => {
       return true;
     }
 
-    // ── LDR — UPDATED with two-level filter ────────────────────────────────────
     if (actualTradeFilter === 'LDR') {
       if (v.tradeGroup !== 'LDR') return false;
-
-      // Level 1: sub-type filter (Leak Detection vs Damp & Mould)
       if (ldrSubFilter) {
         const recordSubType = getLDRSubGroup(v.rawTrade || '');
         if (recordSubType !== ldrSubFilter) return false;
       }
-
-      // Level 2: location filter — only applies to Leak Detection rows
       if (ldrLocFilter) {
         const lg = (v.locationGroup || '').trim();
         if (lg.toLowerCase().startsWith('leak detection')) {
           return lg === `Leak Detection ${ldrLocFilter}`;
         }
-        // Damp/Mould/Restoration have no location suffix — always pass through
         return true;
       }
-
       return true;
     }
 
@@ -1028,16 +1009,15 @@ const VehicleConditionDashboard: React.FC = () => {
             </>
           )}
 
-          {/* ══ LDR — Two-level filter ══════════════════════════════════════════ */}
+          {/* LDR */}
           {actualTradeFilter === 'LDR' && (
             <>
-              {/* Level 1: Sub-type — Leak Detection | Damp & Mould */}
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>View</span>
               <button
                 onClick={() => {
                   const next: LDRSubType = ldrSubFilter === 'Leak Detection' ? null : 'Leak Detection';
                   setLdrSubFilter(next);
-                  if (next !== 'Leak Detection') setLdrLocFilter(null); // clear loc when deselecting
+                  if (next !== 'Leak Detection') setLdrLocFilter(null);
                 }}
                 style={activeBtn(ldrSubFilter === 'Leak Detection')}
               >Leak Detection</button>
@@ -1045,12 +1025,10 @@ const VehicleConditionDashboard: React.FC = () => {
                 onClick={() => {
                   const next: LDRSubType = ldrSubFilter === 'Damp & Mould' ? null : 'Damp & Mould';
                   setLdrSubFilter(next);
-                  setLdrLocFilter(null); // Damp & Mould has no locations
+                  setLdrLocFilter(null);
                 }}
                 style={activeBtn(ldrSubFilter === 'Damp & Mould')}
               >Damp &amp; Mould</button>
-
-              {/* Level 2: Location — only show when Leak Detection is selected */}
               {ldrSubFilter === 'Leak Detection' && (
                 <>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Location</span>
@@ -1063,7 +1041,6 @@ const VehicleConditionDashboard: React.FC = () => {
               )}
             </>
           )}
-          {/* ════════════════════════════════════════════════════════════════════ */}
 
           {/* Admin trade group dropdown */}
           {!isLeeView && showsAllTrades() && (
