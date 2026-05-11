@@ -162,18 +162,51 @@ function getLDRSubGroup(rawTrade: string): 'Leak Detection' | 'Damp & Mould' | n
   return null;
 }
 
-/* ── resolveTradeGroup ── */
-function resolveTradeGroup(rawTradeString: string): string {
-  if (!rawTradeString || rawTradeString === 'ALL') return '';
+/* ── NEW: resolveAllTradeGroups ──────────────────────────────────────────────
+   Replaces the old single-return resolveTradeGroup().
+   Given a raw trade string like "Gas,HVAC,Drainage NW" it returns ALL matching
+   top-level groups: ["Gas, HVAC & Electrical", "Drainage & Plumbing"].
+   This is the root fix for the Peter / multi-trade bug.
+─────────────────────────────────────────────────────────────────────────── */
+function resolveAllTradeGroups(rawTradeString: string): string[] {
+  if (!rawTradeString || rawTradeString === 'ALL') return [];
   const trades = rawTradeString.split(',').map(t => t.trim().toLowerCase());
-  const hasAny = (keywords: string[]) => trades.some(t => keywords.some(k => t.includes(k)));
-  if (hasAny(['hvac', 'gas', 'electrical']))                                                        return 'Gas, HVAC & Electrical';
-  if (hasAny(['drainage', 'plumbing']))                                                             return 'Drainage & Plumbing';
-  if (hasAny(['roofing', 'multi', 'decoration', 'building fabric', 'carpentry', 'general builder',
-               'environmental', 'pest', 'sanitisation', 'waste', 'gardening']))                    return 'Building Fabric & Environmental';
-  if (hasAny(['leak detection', 'damp', 'mould', 'drying', 'restoration']))                        return 'LDR';
-  if (hasAny(['fire safety']))                                                                       return 'Fire Safety';
-  return rawTradeString;
+  const groups = new Set<string>();
+
+  const hasGas  = trades.some(t => t.includes('gas'));
+  const hasHVAC = trades.some(t => t.includes('hvac'));
+  const hasElec = trades.some(t => t.includes('electrical'));
+  if (hasGas || hasHVAC || hasElec) groups.add('Gas, HVAC & Electrical');
+
+  const hasDrain = trades.some(t => t.includes('drainage'));
+  const hasPlumb = trades.some(t => t.includes('plumbing') || t.includes('plumbling'));
+  if (hasDrain || hasPlumb) groups.add('Drainage & Plumbing');
+
+  const hasRoof = trades.some(t => t.includes('roofing'));
+  const hasMulti = trades.some(t => t.includes('multi'));
+  const hasDeco = trades.some(t => t.includes('decoration') || t.includes('decorating'));
+  const hasGB   = trades.some(t => t.includes('general builder'));
+  const hasEnv  = trades.some(t =>
+    t.includes('environmental') || t.includes('pest') ||
+    t.includes('sanitisation') || t.includes('waste') || t.includes('gardening'));
+  if (hasRoof || hasMulti || hasDeco || hasGB || hasEnv) groups.add('Building Fabric & Environmental');
+
+  const hasLDR  = trades.some(t => t.includes('leak detection'));
+  const hasDamp = trades.some(t =>
+    t.includes('damp') || t.includes('mould') ||
+    t.includes('drying') || t.includes('restoration'));
+  if (hasLDR || hasDamp) groups.add('LDR');
+
+  const hasFire = trades.some(t => t.includes('fire safety'));
+  if (hasFire) groups.add('Fire Safety');
+
+  return [...groups];
+}
+
+/* ── Keep old resolveTradeGroup for admin dropdown compatibility ── */
+function resolveTradeGroup(rawTradeString: string): string {
+  const groups = resolveAllTradeGroups(rawTradeString);
+  return groups[0] || rawTradeString;
 }
 
 /* ── resolveSubFilters ── */
@@ -483,7 +516,9 @@ const ListModal: React.FC<ListModalProps> = ({ isOpen, title, data, columns, onC
   );
 };
 
-/* ── Main Component ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════════════════════════════ */
 const VehicleConditionDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [dashboard,           setDashboard]           = useState<DashboardData | null>(null);
@@ -524,37 +559,34 @@ const VehicleConditionDashboard: React.FC = () => {
 
   const { userTrade, showsAllTrades } = useUserTrade();
 
+  /* ── On mount: derive all filters from the user's trade string ── */
   useEffect(() => {
     try {
       const userData = JSON.parse(sessionStorage.getItem('user_data') || '{}');
       const rawTrade = (userData.trade || '').trim();
+
       if (rawTrade && rawTrade !== 'ALL') {
-        const trades = rawTrade.split(',').map(t => t.trim());
+        const trades = rawTrade.split(',').map((t: string) => t.trim());
         setAllowedTrades(new Set(trades));
 
-        const hasElectrical = trades.some(t => t.toLowerCase().includes('electrical'));
+        // ── GHE sub-filter (only pre-set if user has EXACTLY one GHE sub-type) ──
+        const { gheSubFilter: gheSub } = resolveSubFilters(rawTrade);
+        if (gheSub) setGheSubFilter(gheSub);
 
-        const resolvedGroup = resolveTradeGroup(rawTrade);
-        setTradeGroupFilter(resolvedGroup);
+        const { electricalLoc, dpLoc, ldrLoc, roofLoc, ldrSubType } = resolveLocationFilters(rawTrade);
+        if (electricalLoc) setElectricalLocFilter(electricalLoc);
 
-        if (!hasElectrical) {
-          setGheSubFilter(null);
-          setElectricalLocFilter(null);
-        } else {
-          const { gheSubFilter: gheSub } = resolveSubFilters(rawTrade);
-          if (gheSub) setGheSubFilter(gheSub);
-          const { electricalLoc } = resolveLocationFilters(rawTrade);
-          if (electricalLoc) setElectricalLocFilter(electricalLoc);
-        }
-
+        // ── DP sub-filter (only pre-set if user has EXACTLY one DP sub-type) ──
         const { dpSubFilter: dpSub } = resolveSubFilters(rawTrade);
         if (dpSub) setDpSubFilter(dpSub);
 
-        const { dpLoc, ldrLoc, roofLoc, ldrSubType } = resolveLocationFilters(rawTrade);
         if (dpLoc)      setDpLocFilter(dpLoc);
         if (ldrLoc)     setLdrLocFilter(ldrLoc);
         if (roofLoc)    setRoofLocFilter(roofLoc);
         if (ldrSubType) setLdrSubFilter(ldrSubType);
+
+        // ── IMPORTANT: do NOT set tradeGroupFilter here for multi-trade users.
+        //    actualTradeGroups (derived below) handles multi-group routing.
       }
       loadDashboard();
     } catch (e) {
@@ -636,24 +668,36 @@ const VehicleConditionDashboard: React.FC = () => {
   const allSubmitted    = (dashboard?.submitted    || []).map(enrichRecord).filter(v => !isExcludedTrade(v.trade));
   const allNotSubmitted = (dashboard?.notSubmitted || []).map(enrichRecord).filter(v => !isExcludedTrade(v.trade));
 
-  const actualTradeFilter = !showsAllTrades() ? resolveTradeGroup(userTrade || '') : tradeGroupFilter;
+  /* ══════════════════════════════════════════════════════════════════════
+     THE KEY FIX: actualTradeGroups is now an ARRAY of groups.
+     For a user like Peter with "Gas,HVAC,Drainage NW" this will be:
+       ["Gas, HVAC & Electrical", "Drainage & Plumbing"]
+     Admin (ALL) users use tradeGroupFilter as a single-item array or [].
+  ══════════════════════════════════════════════════════════════════════ */
+  const actualTradeGroups: string[] = !showsAllTrades()
+    ? resolveAllTradeGroups(userTrade || '')
+    : tradeGroupFilter
+      ? [tradeGroupFilter]
+      : [];
 
-  /* ── isTradeAllowed ── */
+  // Kept for backward compat with badge label / filter summary
+  const actualTradeFilter = actualTradeGroups[0] || tradeGroupFilter || '';
+
+  /* ── isTradeAllowed: does the record's rawTrade match anything in the
+     user's allowed set? Strips location suffixes for base comparison. ── */
   const isTradeAllowed = (recordRawTrade: string | undefined): boolean => {
     if (showsAllTrades() || allowedTrades.size === 0) return true;
     if (!recordRawTrade) return false;
-
     const recordTrade = recordRawTrade.trim();
-
-    return Array.from(allowedTrades).some(userTrade => {
-      if (recordTrade.toLowerCase().includes(userTrade.toLowerCase())) return true;
-      const baseTrade = userTrade.replace(/ (N|S|E|NW|SW|SE|NE)$/i, '').trim();
-      if (baseTrade !== userTrade && recordTrade.toLowerCase().includes(baseTrade.toLowerCase())) return true;
+    return Array.from(allowedTrades).some(userTradePart => {
+      if (recordTrade.toLowerCase().includes(userTradePart.toLowerCase())) return true;
+      // Strip location suffix (e.g. "Drainage NW" → "Drainage") and re-check
+      const baseTrade = userTradePart.replace(/ (N|S|E|NW|SW|SE|NE)$/i, '').trim();
+      if (baseTrade !== userTradePart && recordTrade.toLowerCase().includes(baseTrade.toLowerCase())) return true;
       return false;
     });
   };
 
-  /* ── Helper to check if user can view a specific trade type ── */
   const canViewTradeType = (tradeType: string): boolean => {
     if (showsAllTrades() || allowedTrades.size === 0) return true;
     return Array.from(allowedTrades).some(trade =>
@@ -661,70 +705,73 @@ const VehicleConditionDashboard: React.FC = () => {
     );
   };
 
-  /* ── Trade filter predicate ── */
-  const matchesTrade = (v: ReturnType<typeof enrichRecord>): boolean => {
-    if (!isTradeAllowed(v.rawTrade)) return false;
-
-    if (isLeeView || actualTradeFilter === 'Building Fabric & Environmental') {
+  /* ── matchesOneGroup: does a record match a specific top-level group
+     given the currently active sub-filters? ── */
+  const matchesOneGroup = (
+    v: ReturnType<typeof enrichRecord>,
+    groupFilter: string,
+  ): boolean => {
+    if (isLeeView || groupFilter === 'Building Fabric & Environmental') {
       const sub = getLeeSubGroup(v.tradeGroup || '', v.rawTrade || '');
       if (sub === null) return false;
       if (!leeSubFilter) return true;
       if (leeSubFilter === 'Environmental Services' && envSubFilter) {
-        const envSub = getEnvironmentalSubTrade(v.rawTrade || '');
-        return envSub === envSubFilter;
+        return getEnvironmentalSubTrade(v.rawTrade || '') === envSubFilter;
       }
       if (sub !== leeSubFilter) return false;
       if (leeSubFilter === 'Roofing' && roofLocFilter) {
-        const lg = (v.locationGroup || '').trim();
-        return lg === `Roofing ${roofLocFilter}`;
+        return (v.locationGroup || '').trim() === `Roofing ${roofLocFilter}`;
       }
       return true;
     }
 
-    if (actualTradeFilter === 'Gas, HVAC & Electrical') {
+    if (groupFilter === 'Gas, HVAC & Electrical') {
       const gheSub = getGHESubGroup(v.tradeGroup || '', v.rawTrade || '');
       if (gheSub === null) return false;
       if (!gheSubFilter) return true;
       if (gheSub !== gheSubFilter) return false;
       if (gheSubFilter === 'Electrical' && electricalLocFilter) {
-        const lg = (v.locationGroup || '').trim();
-        return lg === `Electrical ${electricalLocFilter}`;
+        return (v.locationGroup || '').trim() === `Electrical ${electricalLocFilter}`;
       }
       return true;
     }
 
-    if (actualTradeFilter === 'Drainage & Plumbing') {
+    if (groupFilter === 'Drainage & Plumbing') {
       const dpSub = getDrainagePlumbingSubGroup(v.rawTrade || '');
       if (dpSub === null) return false;
       if (dpSubFilter && dpSub !== dpSubFilter) return false;
       if (dpLocFilter) {
         const lg = (v.locationGroup || '').trim();
-        // ✅ FIX: if locationGroup is empty/blank, don't exclude the record.
-        // Engineers whose Trade_Group_Postcode__c is null in Salesforce would
-        // otherwise be silently dropped, producing the "0 engineers" bug.
-        // Only filter by location when locationGroup is actually populated.
+        // Only filter by location when locationGroup is populated (avoids
+        // silently dropping engineers with no Salesforce postcode group).
         if (lg && !lg.endsWith(` ${dpLocFilter}`)) return false;
       }
       return true;
     }
 
-    if (actualTradeFilter === 'LDR') {
+    if (groupFilter === 'LDR') {
       if (v.tradeGroup !== 'LDR') return false;
       if (ldrSubFilter) {
-        const recordSubType = getLDRSubGroup(v.rawTrade || '');
-        if (recordSubType !== ldrSubFilter) return false;
+        if (getLDRSubGroup(v.rawTrade || '') !== ldrSubFilter) return false;
       }
       if (ldrLocFilter) {
         const lg = (v.locationGroup || '').trim();
         if (lg.toLowerCase().startsWith('leak detection')) {
           return lg === `Leak Detection ${ldrLocFilter}`;
         }
-        return true;
       }
       return true;
     }
 
-    return !actualTradeFilter || v.tradeGroup === actualTradeFilter;
+    return v.tradeGroup === groupFilter;
+  };
+
+  /* ── matchesTrade: record passes if isTradeAllowed AND it matches ANY
+     of the user's resolved trade groups (the multi-group fix). ── */
+  const matchesTrade = (v: ReturnType<typeof enrichRecord>): boolean => {
+    if (!isTradeAllowed(v.rawTrade)) return false;
+    if (actualTradeGroups.length === 0) return true; // admin with no filter
+    return actualTradeGroups.some(g => matchesOneGroup(v, g));
   };
 
   /* ── Date filter ── */
@@ -743,9 +790,14 @@ const VehicleConditionDashboard: React.FC = () => {
   const isFiltered = !!(filterMode || filterDate || actualTradeFilter || leeSubFilter);
 
   const allTradeFiltered = [...allSubmitted, ...allNotSubmitted].filter(matchesTrade);
-  const totalForUser = (isLeeView || actualTradeFilter || !showsAllTrades())
+  const totalForUser = (isLeeView || actualTradeGroups.length > 0 || !showsAllTrades())
     ? new Set(allTradeFiltered.map(v => v.engineerName)).size
     : new Set([...allSubmitted, ...allNotSubmitted].map(v => v.engineerName)).size;
+
+  /* ── Badge label: list all groups the user can see ── */
+  const badgeLabel = actualTradeGroups.length > 0
+    ? actualTradeGroups.join(' & ')
+    : (userTrade || '');
 
   const submittedSubtext =
     filterDate                 ? `Submitted on ${filterDate}` :
@@ -784,7 +836,7 @@ const VehicleConditionDashboard: React.FC = () => {
   ];
 
   /* ── Button style helpers ── */
-  const activeBtn  = (active: boolean, color: string = C.primary.default) => ({
+  const activeBtn = (active: boolean, color: string = C.primary.default) => ({
     padding: "8px 16px", borderRadius: "8px",
     border: `1px solid ${active ? color : C.border.subtle}`,
     background: active ? color : C.gray.negative,
@@ -792,6 +844,13 @@ const VehicleConditionDashboard: React.FC = () => {
     fontSize: "13px", fontWeight: 700, fontFamily: FONT,
     cursor: "pointer", whiteSpace: "nowrap" as const,
   });
+
+  /* ── Whether to show GHE sub-filters (user must have access to that group) ── */
+  const showGHEFilters   = actualTradeGroups.includes('Gas, HVAC & Electrical') || (showsAllTrades() && tradeGroupFilter === 'Gas, HVAC & Electrical');
+  const showDPFilters    = actualTradeGroups.includes('Drainage & Plumbing')    || (showsAllTrades() && tradeGroupFilter === 'Drainage & Plumbing');
+  const showLDRFilters   = actualTradeGroups.includes('LDR')                    || (showsAllTrades() && tradeGroupFilter === 'LDR');
+  const showLeeFilters   = isLeeView || actualTradeGroups.includes('Building Fabric & Environmental') || (showsAllTrades() && tradeGroupFilter === 'Building Fabric & Environmental');
+  const isMultiGroup     = actualTradeGroups.length > 1; // e.g. Peter
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: FONT }}>
@@ -816,7 +875,7 @@ const VehicleConditionDashboard: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: `${C.warning.default}15`, border: `1.5px solid ${C.warning.default}`, whiteSpace: 'nowrap' }}>
                 <Lock style={{ width: 16, height: 16, color: C.warning.default }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: C.warning.default }}>
-                  Viewing {actualTradeFilter || userTrade} only
+                  Viewing {badgeLabel} only
                 </span>
               </div>
             )}
@@ -879,7 +938,7 @@ const VehicleConditionDashboard: React.FC = () => {
         <div style={{ display: "flex", gap: "16px", marginBottom: "40px", flexWrap: "wrap" }}>
           <div id="kpi-total" style={{ flex: 1, minWidth: "200px" }}>
             <KPICard label="Total Active Engineers" value={totalForUser}
-              subtext={actualTradeFilter ? `${actualTradeFilter} only` : "Currently allocated"}
+              subtext={badgeLabel ? `${badgeLabel} only` : "Currently allocated"}
               color="blue" icon="" />
           </div>
           <div id="kpi-submitted" style={{ flex: 1, minWidth: "200px" }}>
@@ -907,12 +966,45 @@ const VehicleConditionDashboard: React.FC = () => {
             onChange={(e) => { setFilterDate(e.target.value); setFilterMode(null); }}
             style={{ padding: "8px 12px", borderRadius: "8px", border: `1px solid ${filterDate ? C.primary.default : C.border.subtle}`, fontSize: "13px", fontFamily: FONT, outline: "none", color: C.text.body }}
           />
+
+          {/* ── For multi-group users (e.g. Peter): show a "View" toggle
+               so they can scope down to one group at a time ── */}
+          {isMultiGroup && (
+            <>
+              <span style={{ color: C.gray.disabled }}>|</span>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>View</span>
+              {actualTradeGroups.map((group) => {
+                const shortLabel: Record<string, string> = {
+                  'Gas, HVAC & Electrical':         'Gas & HVAC',
+                  'Drainage & Plumbing':            'Drainage & Plumbing',
+                  'Building Fabric & Environmental':'Building Fabric',
+                  'LDR':                            'LDR',
+                  'Fire Safety':                    'Fire Safety',
+                };
+                // active when tradeGroupFilter is explicitly set to this group
+                const active = tradeGroupFilter === group;
+                return (
+                  <button key={group}
+                    onClick={() => {
+                      setTradeGroupFilter(active ? '' : group);
+                      // reset all sub-filters when switching groups
+                      setGheSubFilter(null); setDpSubFilter(null);
+                      setElectricalLocFilter(null); setDpLocFilter(null);
+                      setLdrLocFilter(null); setLdrSubFilter(null);
+                      setLeeSubFilter(null); setEnvSubFilter(null); setRoofLocFilter(null);
+                    }}
+                    style={activeBtn(active)}>{shortLabel[group] ?? group}</button>
+                );
+              })}
+            </>
+          )}
+
           <span style={{ color: C.gray.disabled }}>|</span>
 
           {/* Lee / Building Fabric & Environmental */}
-          {(isLeeView || actualTradeFilter === 'Building Fabric & Environmental') && (
+          {showLeeFilters && (!isMultiGroup || tradeGroupFilter === 'Building Fabric & Environmental' || tradeGroupFilter === '') && (
             <>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>View</span>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Sub-Trade</span>
               {(['Multi', 'Roofing', 'Decoration', 'Environmental Services'] as const).map((group) => {
                 const active = leeSubFilter === group;
                 return (
@@ -927,7 +1019,7 @@ const VehicleConditionDashboard: React.FC = () => {
               })}
             </>
           )}
-          {(isLeeView || actualTradeFilter === 'Building Fabric & Environmental') && leeSubFilter === 'Roofing' && (
+          {showLeeFilters && leeSubFilter === 'Roofing' && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Location</span>
               {(['N', 'S'] as const).map((loc) => (
@@ -937,7 +1029,7 @@ const VehicleConditionDashboard: React.FC = () => {
               ))}
             </>
           )}
-          {(isLeeView || actualTradeFilter === 'Building Fabric & Environmental') && leeSubFilter === 'Environmental Services' && (
+          {showLeeFilters && leeSubFilter === 'Environmental Services' && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Sub-Trade</span>
               {(['Pest Control', 'Sanitation', 'Waste Cleaners'] as const).map((subTrade) => {
@@ -950,23 +1042,23 @@ const VehicleConditionDashboard: React.FC = () => {
             </>
           )}
 
-          {/* Gas, HVAC & Electrical */}
-          {actualTradeFilter === 'Gas, HVAC & Electrical' && (
+          {/* Gas, HVAC & Electrical sub-filters */}
+          {showGHEFilters && (!isMultiGroup || tradeGroupFilter === 'Gas, HVAC & Electrical' || tradeGroupFilter === '') && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Sub-Trade</span>
               {(['Gas', 'HVAC', 'Electrical'] as const)
                 .filter(subGroup => canViewTradeType(subGroup))
                 .map((subGroup) => {
-                const active = gheSubFilter === subGroup;
-                return (
-                  <button key={subGroup}
-                    onClick={() => { setGheSubFilter(active ? null : subGroup); if (subGroup !== 'Electrical') setElectricalLocFilter(null); }}
-                    style={activeBtn(active)}>{subGroup}</button>
-                );
-              })}
+                  const active = gheSubFilter === subGroup;
+                  return (
+                    <button key={subGroup}
+                      onClick={() => { setGheSubFilter(active ? null : subGroup); if (subGroup !== 'Electrical') setElectricalLocFilter(null); }}
+                      style={activeBtn(active)}>{subGroup}</button>
+                  );
+                })}
             </>
           )}
-          {actualTradeFilter === 'Gas, HVAC & Electrical' && gheSubFilter === 'Electrical' && canViewTradeType('Electrical') && (
+          {showGHEFilters && gheSubFilter === 'Electrical' && canViewTradeType('Electrical') && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Location</span>
               {(['N', 'S'] as const)
@@ -977,15 +1069,15 @@ const VehicleConditionDashboard: React.FC = () => {
                   return allowedTrades.has(`Electrical ${loc}`);
                 })
                 .map((loc) => (
-                <button key={loc} onClick={() => setElectricalLocFilter(electricalLocFilter === loc ? null : loc)}
-                  style={activeBtn(electricalLocFilter === loc)}
-                >{loc === 'N' ? 'N — North' : 'S — South'}</button>
-              ))}
+                  <button key={loc} onClick={() => setElectricalLocFilter(electricalLocFilter === loc ? null : loc)}
+                    style={activeBtn(electricalLocFilter === loc)}
+                  >{loc === 'N' ? 'N — North' : 'S — South'}</button>
+                ))}
             </>
           )}
 
-          {/* Drainage & Plumbing */}
-          {actualTradeFilter === 'Drainage & Plumbing' && (
+          {/* Drainage & Plumbing sub-filters */}
+          {showDPFilters && (!isMultiGroup || tradeGroupFilter === 'Drainage & Plumbing' || tradeGroupFilter === '') && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Sub-Trade</span>
               {(['Drainage', 'Plumbing'] as const).map((subGroup) => {
@@ -995,10 +1087,6 @@ const VehicleConditionDashboard: React.FC = () => {
                     style={activeBtn(active)}>{subGroup}</button>
                 );
               })}
-            </>
-          )}
-          {actualTradeFilter === 'Drainage & Plumbing' && (
-            <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>Location</span>
               {(['E', 'NW', 'SW'] as const).map((loc) => (
                 <button key={loc} onClick={() => setDpLocFilter(dpLocFilter === loc ? null : loc)}
@@ -1008,8 +1096,8 @@ const VehicleConditionDashboard: React.FC = () => {
             </>
           )}
 
-          {/* LDR */}
-          {actualTradeFilter === 'LDR' && (
+          {/* LDR sub-filters */}
+          {showLDRFilters && (!isMultiGroup || tradeGroupFilter === 'LDR' || tradeGroupFilter === '') && (
             <>
               <span style={{ fontSize: "13px", fontWeight: 700, color: C.gray.subtle, whiteSpace: "nowrap" }}>View</span>
               <button
@@ -1061,14 +1149,14 @@ const VehicleConditionDashboard: React.FC = () => {
           )}
 
           {/* Clear */}
-          {(filterMode || filterDate || leeSubFilter || envSubFilter || gheSubFilter || dpSubFilter || electricalLocFilter || dpLocFilter || ldrLocFilter || roofLocFilter || ldrSubFilter) && (
+          {(filterMode || filterDate || leeSubFilter || envSubFilter || gheSubFilter || dpSubFilter || electricalLocFilter || dpLocFilter || ldrLocFilter || roofLocFilter || ldrSubFilter || (isMultiGroup && tradeGroupFilter)) && (
             <button onClick={clearAllFilters}
               style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${C.border.subtle}`, background: C.gray.negative, fontSize: "12px", fontWeight: 600, color: C.gray.subtle, cursor: "pointer", fontFamily: FONT }}
             >Clear ✕</button>
           )}
 
           {/* Summary */}
-          {(isFiltered || actualTradeFilter) && (
+          {(isFiltered || actualTradeGroups.length > 0) && (
             <span style={{ fontSize: "12px", color: C.gray.caption }}>
               {filteredSubmitted.length} submitted · {filteredNotSubmitted.length} not submitted
               {electricalLocFilter ? ` · Electrical ${electricalLocFilter}` :
@@ -1080,7 +1168,8 @@ const VehicleConditionDashboard: React.FC = () => {
                leeSubFilter        ? ` · ${leeSubFilter}` :
                gheSubFilter        ? ` · ${gheSubFilter}` :
                dpSubFilter         ? ` · ${dpSubFilter}` :
-               actualTradeFilter   ? ` · ${actualTradeFilter}` : ""}
+               tradeGroupFilter    ? ` · ${tradeGroupFilter}` :
+               badgeLabel          ? ` · ${badgeLabel}` : ""}
             </span>
           )}
         </div>
@@ -1108,9 +1197,9 @@ const VehicleConditionDashboard: React.FC = () => {
         <div onClick={() => setVcrPopup(p => ({ ...p, open: false }))}
           style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(26,29,35,0.7)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}
         >
-        <div id="vcr-popup" onClick={(e) => e.stopPropagation()}
-          style={{ background: "#FFFFFF", borderRadius: "14px", width: "680px", maxWidth: "95vw", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: FONT }}
-        >
+          <div id="vcr-popup" onClick={(e) => e.stopPropagation()}
+            style={{ background: "#FFFFFF", borderRadius: "14px", width: "680px", maxWidth: "95vw", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: FONT }}
+          >
             <div style={{ padding: "20px 24px", borderBottom: `1px solid ${C.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#FFFFFF", zIndex: 1 }}>
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: C.primary.default }}>VCR Report</h2>
               <button onClick={() => setVcrPopup(p => ({ ...p, open: false }))} style={{ border: "none", background: "none", fontSize: "22px", cursor: "pointer", color: C.gray.subtle }}>✕</button>
