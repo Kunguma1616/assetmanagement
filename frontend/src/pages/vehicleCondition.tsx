@@ -638,7 +638,7 @@ const VehicleConditionDashboard: React.FC = () => {
 
   const actualTradeFilter = !showsAllTrades() ? resolveTradeGroup(userTrade || '') : tradeGroupFilter;
 
-  /* ── ✅ FIXED: isTradeAllowed — regex now handles NW, SW, SE, NE, N, S, E ── */
+  /* ── isTradeAllowed ── */
   const isTradeAllowed = (recordRawTrade: string | undefined): boolean => {
     if (showsAllTrades() || allowedTrades.size === 0) return true;
     if (!recordRawTrade) return false;
@@ -646,13 +646,8 @@ const VehicleConditionDashboard: React.FC = () => {
     const recordTrade = recordRawTrade.trim();
 
     return Array.from(allowedTrades).some(userTrade => {
-      // Direct match: record trade is contained in or matches the user's allowed trade
       if (recordTrade.toLowerCase().includes(userTrade.toLowerCase())) return true;
-
-      // ✅ FIXED: strip location suffix (N, S, E, NW, SW, SE, NE) to get base trade
-      // This lets "Drainage SW" match against a record with rawTrade "Drainage"
       const baseTrade = userTrade.replace(/ (N|S|E|NW|SW|SE|NE)$/i, '').trim();
-
       if (baseTrade !== userTrade && recordTrade.toLowerCase().includes(baseTrade.toLowerCase())) return true;
       return false;
     });
@@ -704,7 +699,11 @@ const VehicleConditionDashboard: React.FC = () => {
       if (dpSubFilter && dpSub !== dpSubFilter) return false;
       if (dpLocFilter) {
         const lg = (v.locationGroup || '').trim();
-        return lg.endsWith(` ${dpLocFilter}`);
+        // ✅ FIX: if locationGroup is empty/blank, don't exclude the record.
+        // Engineers whose Trade_Group_Postcode__c is null in Salesforce would
+        // otherwise be silently dropped, producing the "0 engineers" bug.
+        // Only filter by location when locationGroup is actually populated.
+        if (lg && !lg.endsWith(` ${dpLocFilter}`)) return false;
       }
       return true;
     }
